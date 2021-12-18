@@ -17,7 +17,7 @@ export interface IRedisOptions {
 };
 
 export type extractedValueType = (
-    Array<string|number|Error|null|extractedValueType[]>
+    Array<string|number|Error|null|extractedValueType>
 );
 
 export const REDIS_DEFAULTS: IRedisOptions = {
@@ -103,66 +103,170 @@ export const coerceTypes = {
     },
 };
 
-export function extractValue ( subStr, currentArray = [] ): extractedValueType {
+/*
+
+export function extractValue1 ( subStr, currentArray: extractedValueType | void ): extractedValueType {
     const type = subStr.charAt(0);
 
     switch ( type ) {
         case `+`:
-            currentArray.push(subStr.slice(1, -2));
-            break;
+            return subStr.slice(1, -2);
 
         case `*`: {
+            // Return a null value per Redis docs
+            if ( subStr.charAt(1) === `-` ) {
+                if ( !currentArray ) {
+                    return null;
+                }
+                currentArray.push(null);
+                const nextStr = subStr.slice(5);
+                if ( nextStr ) {
+                    return extractValue(nextStr, currentArray);
+                }
+                return currentArray;
+            }
+
+            let char = ``;
             let i = 1;
-            // let char = ``;
             while ( subStr.charAt(i) !== `\r` ) {
-                // char += subStr.charAt(i);
+                char += subStr.charAt(i);
                 i += 1;
             }
 
-            let nextStr = subStr.slice(i + 2);
-            // const total = ~~char;
-            const container = [
-                // ...new Array(total)
-            ];
-            // let _nextStr = ``;
+            /!*const total = ~~char;
+            const container = new Array(total);
 
-            // for ( let a = 0; a < total; a++ ) {
-                extractValue(nextStr, container);
+            let nextStr = subStr.slice(i + 2);
+            for ( let a = 0; a < total; ++a ) {
+                i = 0;
+                container[ a ] = extractValue(nextStr);
+                while ( nextStr.charAt(i) !== `\r` ) {
+                    i += 1;
+                }
+                console.log(i);
+                nextStr = nextStr.slice(i + 2);
+            }*!/
+
+
+            // const total = ~~char;
+            // const container = new Array(total);
+
+            let nextStr = subStr.slice(i + 2);
+            // for ( let a = 0; a < total; ++a ) {
+            //     i = 0;
+
+                // while ( nextStr.charAt(i) !== `\r` ) {
+                //     i += 1;
+                // }
+                // console.log(i);
+                // nextStr = nextStr.slice(i + 2);
             // }
 
-            currentArray.push(container);
-            break;
+            if ( !currentArray ) {
+                return [].concat(extractValue(nextStr, []));
+                // return extractValue(nextStr, container);
+            }
+            currentArray.push(extractValue(nextStr, []));
+            // currentArray.push(container);
 
-            // return result[ 0 ].reduce(( fullArray, item, i ) => {
-            //     const lastValue = i > 0
-            //         ? fullArray[ i - 1 ]
-            //         : result;
-            //
-            //     fullArray.push(extractValue(lastValue[ 1 ]));
-            //
-            //     return fullArray;
-            // }, []);
+            // currentArray.push(extractValue(nextStr, container));
+            // currentArray.push(extractValue(nextStr));
+            // container.push(extractValue(nextStr, currentArray));
+            // return extractValue(nextStr, container);
+
+            break;
         }
 
         default:
 
             const getter = coerceTypes[ type ];
 
-            const [
+            let [
                 result,
                 nextStr,
             ] = getter(subStr);
 
+            if ( !currentArray ) {
+                // while ( nextStr ) {
+                //     [ result, nextStr ] = getter(nextStr);
+                // }
+                // return extractValue(nextStr);
+                return result;
+            }
+
             currentArray.push(result);
 
-            if ( nextStr ) {
-                return extractValue(nextStr, currentArray);
+            while ( nextStr ) {
+                [ result, nextStr ] = getter(nextStr);
+                currentArray.push(extractValue(nextStr));
             }
+            // if ( nextStr ) {
+            //     currentArray.push(extractValue(nextStr));
+            //     return extractValue(nextStr, currentArray);
+            // }
+
+            return result;
 
             break;
     }
 
     return currentArray;
+}
+*/
+
+export function extractArray ( subStr, topLevel = false ) {
+    let numChar = ``;
+    let i = 1;
+    while ( subStr.charAt(i) !== `\r` ) {
+        numChar += subStr.charAt(i);
+        i += 1;
+    }
+
+    const total = ~~numChar;
+    const newArray = [];
+    if ( total === 0 ) {
+        return newArray;
+    }
+
+    let nextStr = subStr.slice(i + 2);
+    for ( let a = 0; a < total; a++ ) {
+        let result;
+        [ result, nextStr ] = extractValue(nextStr, topLevel);
+        newArray.push(result);
+    }
+
+    return [
+        newArray,
+        nextStr,
+    ];
+}
+
+export function extractValue ( subStr, topLevel = false ) {
+    const type = subStr.charAt(0);
+    const getter = coerceTypes[ type ];
+
+    switch ( type ) {
+        case `+`:
+            return [
+                subStr.slice(1, -2),
+                null,
+            ];
+
+        case `*`:
+            if ( subStr.charAt(1) === `-` ) {
+                return null;
+            }
+            return extractArray(subStr, topLevel);
+
+        default:
+            // let [
+            //     result,
+            //     nextStr,
+            // ] = getter(subStr);
+
+            return getter(subStr);
+
+    }
 }
 
 export function connect ( config ) {
@@ -183,12 +287,20 @@ export function connect ( config ) {
         conn.write(`EXISTS ${prefix}:map\r\n`);
         conn.write(`EXISTS ${prefix}1:map\r\n`);
         conn.write(`HMGET ${prefix}:map a b c d\r\n`);
-        // conn.write(`HGETALL ${prefix}:map\r\n`);
+        conn.write(`HGETALL ${prefix}:map\r\n`);
 
         try {
             for await ( const data of conn ) {
-                console.log(data.toString());
-                yield extractValue(data.toString());
+                const dataStr = data.toString();
+                console.log(dataStr);
+                let result;
+                let nextStr = dataStr;
+                let topLevel = true;
+                do {
+                    [ result, nextStr ] = extractValue(nextStr, topLevel);
+                    yield result;
+                }
+                while ( nextStr );
             }
         }
         catch ( error ) {
