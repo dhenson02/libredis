@@ -2,16 +2,12 @@
 
 import {
     parentPort,
-    // threadId,
+    threadId,
 } from "worker_threads";
 
 export type extractedValueType = (
     string | number | Error | null
 );
-
-export type extractedValueSetType = (
-    extractedValueType[]
-)
 
 export const NULL_JSON = JSON.stringify(null);
 export const ZERO_JSON = JSON.stringify(0);
@@ -23,11 +19,11 @@ export const OBJECT = `object`;
 export const STRING = `string`;
 export const NUMBER = `number`;
 
-export function isCarriageReturn ( char ): boolean {
+export function isCarriageReturn ( char: string ): boolean {
     return char === `\r`;
 }
 
-export function getBulkString ( subStr ): [ extractedValueType, string ] {
+export function getBulkString ( subStr: string ): [ extractedValueType, string ] {
     // $-1 is null value inside array
     if ( subStr.charAt(1) === `-` ) {
         return [
@@ -52,7 +48,7 @@ export function getBulkString ( subStr ): [ extractedValueType, string ] {
     ];
 }
 
-export function getNumber ( subStr ): [ extractedValueType, string ] {
+export function getNumber ( subStr: string ): [ extractedValueType, string ] {
     let i = 1;
     let char = ``;
     let current = subStr.charAt(i);
@@ -69,7 +65,7 @@ export function getNumber ( subStr ): [ extractedValueType, string ] {
     ];
 }
 
-export function getError ( subStr ): [ extractedValueType, string ] {
+export function getError ( subStr: string ): [ extractedValueType, string ] {
     let i = 1;
     while ( !isCarriageReturn(subStr.charAt(i)) ) {
         i += 1;
@@ -81,7 +77,7 @@ export function getError ( subStr ): [ extractedValueType, string ] {
     ];
 }
 
-export function extractArray ( subStr ): [ extractedValueType[], string ] {
+export function extractArray ( subStr: string ): [ extractedValueType[], string ] {
     let numChar = ``;
     let i = 1;
     let current = subStr.charAt(i);
@@ -115,7 +111,7 @@ export function extractArray ( subStr ): [ extractedValueType[], string ] {
     ];
 }
 
-export function extractValue ( subStr ): [ extractedValueType | extractedValueType[], string ] {
+export function extractValue ( subStr: string ): [ extractedValueType | extractedValueType[], string ] {
     const type = subStr.charAt(0);
 
     switch ( type ) {
@@ -151,7 +147,7 @@ export function extractValue ( subStr ): [ extractedValueType | extractedValueTy
     }
 }
 
-export function parseFromJSON ( string ) {
+export function parseFromJSON ( string: string ) {
     if ( typeof string !== STRING ) {
         return null;
     }
@@ -180,11 +176,11 @@ export function stringifyToJSON ( data ) {
     return JSON.stringify(data);
 }
 
-export function queue ( data, type ) {
-    parentPort?.postMessage(`stringified`, [ Buffer.from(data, `utf8`) ]);
-}
+// export function queue ( data, type ) {
+//     parentPort?.postMessage(`stringified`, [ Buffer.from(data, `utf8`) ]);
+// }
 
 
-parentPort?.on(`message`, function subscriptionHandler ( data ) {
-    server.publish(`draw`, data, true);
+parentPort?.on(`message-${threadId}`, function subscriptionHandler ( data ) {
+
 });

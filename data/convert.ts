@@ -42,13 +42,17 @@ function reForkThread () {
 if ( isMainThread ) {
     reForkThread();
 }
-// else {
-    // const {
-        // queue,
-        // stringifyToJSON,
-        // parseFromJSON,
-    // } = require('./parser');
-    // spin up a new thread for each new conversion
-    // queue([1,2,3], ``)
+else {
 
-// }
+    /**
+     * @TODO LIST
+     *
+     * - JSON conversions
+     * - Queue data in/out correctly
+     *
+     */
+
+
+
+
+}
