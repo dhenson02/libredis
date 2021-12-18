@@ -1,7 +1,17 @@
+"use strict";
+
 import {
     parentPort,
     // threadId,
 } from "worker_threads";
+
+export type extractedValueType = (
+    string | number | Error | null
+);
+
+export type extractedValueSetType = (
+    extractedValueType[]
+)
 
 export const NULL_JSON = JSON.stringify(null);
 export const ZERO_JSON = JSON.stringify(0);
@@ -12,6 +22,134 @@ export const EMPTY_OBJECT_JSON = JSON.stringify({});
 export const OBJECT = `object`;
 export const STRING = `string`;
 export const NUMBER = `number`;
+
+export function isCarriageReturn ( char ): boolean {
+    return char === `\r`;
+}
+
+export function getBulkString ( subStr ): [ extractedValueType, string ] {
+    // $-1 is null value inside array
+    if ( subStr.charAt(1) === `-` ) {
+        return [
+            null,
+            subStr.slice(5),
+        ];
+    }
+
+    let i = 1;
+    let charCount = ``;
+    let current = subStr.charAt(i);
+    do {
+        charCount += current;
+        i += 1;
+        current = subStr.charAt(i);
+    }
+    while ( !isCarriageReturn(current) );
+
+    return [
+        subStr.slice(i + 2, i + 2 + ~~charCount),
+        subStr.slice(i + 2 + ~~charCount + 2),
+    ];
+}
+
+export function getNumber ( subStr ): [ extractedValueType, string ] {
+    let i = 1;
+    let char = ``;
+    let current = subStr.charAt(i);
+    do {
+        char += current;
+        i += 1;
+        current = subStr.charAt(i);
+    }
+    while ( !isCarriageReturn(current) );
+
+    return [
+        ~~char,
+        subStr.slice(i + 2),
+    ];
+}
+
+export function getError ( subStr ): [ extractedValueType, string ] {
+    let i = 1;
+    while ( !isCarriageReturn(subStr.charAt(i)) ) {
+        i += 1;
+    }
+
+    return [
+        new Error(subStr.slice(1, i)),
+        subStr.slice(i + 2),
+    ];
+}
+
+export function extractArray ( subStr ): [ extractedValueType[], string ] {
+    let numChar = ``;
+    let i = 1;
+    let current = subStr.charAt(i);
+
+    do {
+        numChar += current;
+        i += 1;
+        current = subStr.charAt(i);
+    }
+    while ( !isCarriageReturn(current) );
+
+    let nextStr = subStr.slice(i + 2);
+    const total = ~~numChar;
+    const newArray = new Array(total);
+    if ( total === 0 ) {
+        return [
+            newArray,
+            nextStr,
+        ];
+    }
+
+    for ( let a = 0; a < total; a++ ) {
+        let result;
+        [ result, nextStr ] = extractValue(nextStr);
+        newArray[ a ] = result;
+    }
+
+    return [
+        newArray,
+        nextStr,
+    ];
+}
+
+export function extractValue ( subStr ): [ extractedValueType | extractedValueType[], string ] {
+    const type = subStr.charAt(0);
+
+    switch ( type ) {
+        case `*`:
+            if ( subStr.charAt(1) === `-` ) {
+                return [
+                    null,
+                    subStr.slice(5),
+                ];
+            }
+            return extractArray(subStr);
+
+        case `+`:
+            return [
+                subStr.slice(1, -2),
+                ``,
+            ];
+
+        case `$`:
+            return getBulkString(subStr);
+
+        case `-`:
+            return getError(subStr);
+
+        case `:`:
+            return getNumber(subStr);
+
+        default:
+            return [
+                subStr,
+                ``,
+            ];
+    }
+}
 
 export function parseFromJSON ( string ) {
     if ( typeof string !== STRING ) {
@@ -43,11 +181,10 @@ export function stringifyToJSON ( data ) {
 }
 
 export function queue ( data, type ) {
-
     parentPort?.postMessage(`stringified`, [ Buffer.from(data, `utf8`) ]);
 }
 
 
-// parentPort?.on(`message`, function subscriptionHandler ( data ) {
-//     server.publish(`draw`, data, true);
-// });
+parentPort?.on(`message`, function subscriptionHandler ( data ) {
+    server.publish(`draw`, data, true);
+});

@@ -2,6 +2,10 @@
 
 import net from "net";
 
+import {
+    extractValue,
+} from "./parser";
+
 export interface IRedisOptions {
     /**
      * Keep this many connections alive and iterate between them as usage increases
@@ -15,10 +19,6 @@ export interface IRedisOptions {
     "keyPrefix": string;
     "connectionName": string;
 };
-
-export type extractedValueType = (
-    Array<string|number|Error|null|extractedValueType>
-);
 
 export const REDIS_DEFAULTS: IRedisOptions = {
     "poolMax": 6,
@@ -56,108 +56,6 @@ export function makeOptions ( redisConfig ) {
     return options;
 }
 
-export const coerceTypes = {
-    "$": function getBulkString ( subStr ) {
-        // $-1 is null value inside array
-        if ( subStr.charAt(1) === `-` ) {
-            return [
-                null,
-                subStr.slice(5),
-            ];
-        }
-
-        let i = 1;
-        let charCount = ``;
-        while ( subStr.charAt(i) !== `\r` ) {
-            charCount += subStr.charAt(i);
-            i += 1;
-        }
-        return [
-            subStr.slice(i + 2, i + 2 + ~~charCount),
-            subStr.slice(i + 2 + ~~charCount + 2),
-        ];
-    },
-
-    ":": function getString ( subStr ) {
-        let i = 1;
-        let char = ``;
-        while ( subStr.charAt(i) !== `\r` ) {
-            char += subStr.charAt(i);
-            i += 1;
-        }
-        return [
-            ~~char,
-            subStr.slice(i + 2),
-        ];
-    },
-
-    "-": function getError ( subStr ) {
-        let i = 1;
-        while ( subStr.charAt(i) !== `\r` ) {
-            i += 1;
-        }
-        return [
-            new Error(subStr.slice(1, i)),
-            subStr.slice(i + 2),
-        ];
-    },
-};
-
-export function extractArray ( subStr ): [ extractedValueType[], string ] {
-    let numChar = ``;
-    let i = 1;
-    while ( subStr.charAt(i) !== `\r` ) {
-        numChar += subStr.charAt(i);
-        i += 1;
-    }
-
-    let nextStr = subStr.slice(i + 2);
-    const total = ~~numChar;
-    const newArray = [];
-    if ( total === 0 ) {
-        return [
-            newArray,
-            nextStr,
-        ];
-    }
-
-    for ( let a = 0; a < total; a++ ) {
-        let result;
-        [ result, nextStr ] = extractValue(nextStr);
-        newArray.push(result);
-    }
-
-    return [
-        newArray,
-        nextStr,
-    ];
-}
-
-export function extractValue ( subStr ): [extractedValueType, string] {
-    const type = subStr.charAt(0);
-    const getter = coerceTypes[ type ];
-
-    switch ( type ) {
-        case `+`:
-            return [
-                subStr.slice(1, -2),
-                ``,
-            ];
-
-        case `*`:
-            if ( subStr.charAt(1) === `-` ) {
-                return [
-                    null,
-                    subStr.slice(5),
-                ];
-            }
-            return extractArray(subStr);
-
-        default:
-            return getter(subStr);
-    }
-}
-
 export function connect ( config ) {
     const options = makeOptions(config);
     const baseArray = [ ...new Array(options.poolMax) ];
@@ -170,6 +68,7 @@ export function connect ( config ) {
     let nextUp = 0;
     return async function* getPrefix ( prefix = `app` ) {
         const index = nextUp % connections.length;
+
         if ( usingMap.has(index) ) {
             let timer = setTimeout(async () => {
                 clearTimeout(timer);
