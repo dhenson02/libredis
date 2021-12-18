@@ -26,9 +26,36 @@ export function reFork () {
 }
 
 if ( cluster.isMaster ) {
-    os.cpus().forEach(reFork);
+    NODE_ENV === `development`
+        ? reFork()
+        : os.cpus().forEach(reFork);
 }
 else {
-    const a = require('./api');
-    console.log(a);
+    const { getPrefix } = await import('./api/index.js');
+
+    const redis = getPrefix(`a`);
+    let current;
+    do {
+        current = await redis.next();
+        console.log(current.value);
+    }
+    while ( !current.done );
+
+    // let a = setTimeout(() => {
+    //     clearTimeout(a);
+    //     getPrefix(`ab`);
+    // }, 1000);
+
+    // getPrefix(`abc`);
+    // getPrefix(`abcd`);
+    // getPrefix(`abcde`);
+    // getPrefix(`abcdef`);
+    // let a = setTimeout(() => {
+    //     clearTimeout(a);
+    //     getPrefix(`abcdefg`);
+    //     getPrefix(`abcdefgh`);
+    //     getPrefix(`abcdefghi`);
+    //     getPrefix(`abcdef`);
+    //     getPrefix(`abcde`);
+    // }, 1000);
 }

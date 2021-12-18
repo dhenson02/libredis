@@ -2,6 +2,7 @@
     "name": "libredis",
     "version": "1.0.0",
     "description": "Node API to connect and interface with Redis",
+    "type": "module",
     "main": "build/index.js",
     "scripts": {
         "start": "npm run tsc && npm run app",
@@ -17,7 +18,7 @@
         "redis",
         "node"
     ],
-    "author": "Deryck Henson (@dhenson02)",
+    "author": "",
     "license": "MIT",
     "devDependencies": {
         "chai": "^4.3.4",

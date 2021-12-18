@@ -1,5 +1,9 @@
 "use strict";
 
-const test = process.env.NODE_ENV;
+import path from "path";
+import { connect } from "../data/connect.js";
 
-export default test;
+export const getPrefix = connect({
+    "path": path.resolve(`/run/redis/redis.sock`),
+    "poolMax": 5,
+});
