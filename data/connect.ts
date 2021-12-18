@@ -21,7 +21,7 @@ export type extractedValueType = (
 );
 
 export const REDIS_DEFAULTS: IRedisOptions = {
-    "poolMax": 2,
+    "poolMax": 6,
     "db": 0,
     "prefix": ``,
     "path": ``,
@@ -141,12 +141,15 @@ export function extractValue ( subStr ): [extractedValueType, string] {
         case `+`:
             return [
                 subStr.slice(1, -2),
-                null,
+                ``,
             ];
 
         case `*`:
             if ( subStr.charAt(1) === `-` ) {
-                return null;
+                return [
+                    null,
+                    subStr.slice(5),
+                ];
             }
             return extractArray(subStr);
 
@@ -162,23 +165,31 @@ export function connect ( config ) {
         return net.createConnection(options.path);
     });
 
+    const usingMap = new Map();
     let inUse = 0;
     let nextUp = 0;
     return async function* getPrefix ( prefix = `app` ) {
         const index = nextUp % connections.length;
+        if ( usingMap.has(index) ) {
+            let timer = setTimeout(async () => {
+                clearTimeout(timer);
+                await getPrefix(prefix);
+            }, 500); // @TODO - exponential backoff
+            return timer;
+        }
+
+        usingMap.set(index, true);
         const conn = connections[ index ];
+
         inUse = index;
         nextUp = inUse + 1;
 
         conn.write(`EXISTS ${prefix}:map\r\n`);
-        // conn.write(`EXISTS ${prefix}1:map\r\n`);
         conn.write(`HMGET ${prefix}:map a b c d\r\n`);
-        // conn.write(`HGETALL ${prefix}:map\r\n`);
 
         try {
             for await ( const data of conn ) {
                 const dataStr = data.toString();
-                // console.log(dataStr);
                 let result;
                 let nextStr = dataStr;
                 do {
@@ -194,6 +205,7 @@ export function connect ( config ) {
 
         nextUp = index;
         inUse = index - 1;
+        usingMap.delete(index);
         return conn;
     }
 }
