@@ -103,7 +103,7 @@ export const coerceTypes = {
     },
 };
 
-export function extractArray ( subStr, topLevel = false ): [ extractedValueType[], string ] {
+export function extractArray ( subStr ): [ extractedValueType[], string ] {
     let numChar = ``;
     let i = 1;
     while ( subStr.charAt(i) !== `\r` ) {
@@ -123,7 +123,7 @@ export function extractArray ( subStr, topLevel = false ): [ extractedValueType[
 
     for ( let a = 0; a < total; a++ ) {
         let result;
-        [ result, nextStr ] = extractValue(nextStr, topLevel);
+        [ result, nextStr ] = extractValue(nextStr);
         newArray.push(result);
     }
 
@@ -133,7 +133,7 @@ export function extractArray ( subStr, topLevel = false ): [ extractedValueType[
     ];
 }
 
-export function extractValue ( subStr, topLevel = false ): [extractedValueType, string] {
+export function extractValue ( subStr ): [extractedValueType, string] {
     const type = subStr.charAt(0);
     const getter = coerceTypes[ type ];
 
@@ -148,7 +148,7 @@ export function extractValue ( subStr, topLevel = false ): [extractedValueType, 
             if ( subStr.charAt(1) === `-` ) {
                 return null;
             }
-            return extractArray(subStr, topLevel);
+            return extractArray(subStr);
 
         default:
             return getter(subStr);
@@ -171,9 +171,9 @@ export function connect ( config ) {
         nextUp = inUse + 1;
 
         conn.write(`EXISTS ${prefix}:map\r\n`);
-        conn.write(`EXISTS ${prefix}1:map\r\n`);
+        // conn.write(`EXISTS ${prefix}1:map\r\n`);
         conn.write(`HMGET ${prefix}:map a b c d\r\n`);
-        conn.write(`HGETALL ${prefix}:map\r\n`);
+        // conn.write(`HGETALL ${prefix}:map\r\n`);
 
         try {
             for await ( const data of conn ) {
@@ -181,9 +181,8 @@ export function connect ( config ) {
                 // console.log(dataStr);
                 let result;
                 let nextStr = dataStr;
-                let topLevel = true;
                 do {
-                    [ result, nextStr ] = extractValue(nextStr, topLevel);
+                    [ result, nextStr ] = extractValue(nextStr);
                     yield result;
                 }
                 while ( nextStr );
