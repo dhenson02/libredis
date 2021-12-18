@@ -34,12 +34,9 @@ else {
     const { getPrefix } = await import('./api/index.js');
 
     const redis = getPrefix(`a`);
-    let current;
-    do {
-        current = await redis.next();
-        console.log(current.value);
+    for await ( const current of redis ) {
+        console.log(current);
     }
-    while ( !current.done );
 
     // let a = setTimeout(() => {
     //     clearTimeout(a);
