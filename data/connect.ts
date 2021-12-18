@@ -103,118 +103,7 @@ export const coerceTypes = {
     },
 };
 
-/*
-
-export function extractValue1 ( subStr, currentArray: extractedValueType | void ): extractedValueType {
-    const type = subStr.charAt(0);
-
-    switch ( type ) {
-        case `+`:
-            return subStr.slice(1, -2);
-
-        case `*`: {
-            // Return a null value per Redis docs
-            if ( subStr.charAt(1) === `-` ) {
-                if ( !currentArray ) {
-                    return null;
-                }
-                currentArray.push(null);
-                const nextStr = subStr.slice(5);
-                if ( nextStr ) {
-                    return extractValue(nextStr, currentArray);
-                }
-                return currentArray;
-            }
-
-            let char = ``;
-            let i = 1;
-            while ( subStr.charAt(i) !== `\r` ) {
-                char += subStr.charAt(i);
-                i += 1;
-            }
-
-            /!*const total = ~~char;
-            const container = new Array(total);
-
-            let nextStr = subStr.slice(i + 2);
-            for ( let a = 0; a < total; ++a ) {
-                i = 0;
-                container[ a ] = extractValue(nextStr);
-                while ( nextStr.charAt(i) !== `\r` ) {
-                    i += 1;
-                }
-                console.log(i);
-                nextStr = nextStr.slice(i + 2);
-            }*!/
-
-
-            // const total = ~~char;
-            // const container = new Array(total);
-
-            let nextStr = subStr.slice(i + 2);
-            // for ( let a = 0; a < total; ++a ) {
-            //     i = 0;
-
-                // while ( nextStr.charAt(i) !== `\r` ) {
-                //     i += 1;
-                // }
-                // console.log(i);
-                // nextStr = nextStr.slice(i + 2);
-            // }
-
-            if ( !currentArray ) {
-                return [].concat(extractValue(nextStr, []));
-                // return extractValue(nextStr, container);
-            }
-            currentArray.push(extractValue(nextStr, []));
-            // currentArray.push(container);
-
-            // currentArray.push(extractValue(nextStr, container));
-            // currentArray.push(extractValue(nextStr));
-            // container.push(extractValue(nextStr, currentArray));
-            // return extractValue(nextStr, container);
-
-            break;
-        }
-
-        default:
-
-            const getter = coerceTypes[ type ];
-
-            let [
-                result,
-                nextStr,
-            ] = getter(subStr);
-
-            if ( !currentArray ) {
-                // while ( nextStr ) {
-                //     [ result, nextStr ] = getter(nextStr);
-                // }
-                // return extractValue(nextStr);
-                return result;
-            }
-
-            currentArray.push(result);
-
-            while ( nextStr ) {
-                [ result, nextStr ] = getter(nextStr);
-                currentArray.push(extractValue(nextStr));
-            }
-            // if ( nextStr ) {
-            //     currentArray.push(extractValue(nextStr));
-            //     return extractValue(nextStr, currentArray);
-            // }
-
-            return result;
-
-            break;
-    }
-
-    return currentArray;
-}
-*/
-
-export function extractArray ( subStr, topLevel = false ) {
+export function extractArray ( subStr, topLevel = false ): [ extractedValueType[], string ] {
     let numChar = ``;
     let i = 1;
     while ( subStr.charAt(i) !== `\r` ) {
@@ -222,13 +111,16 @@ export function extractArray ( subStr, topLevel = false ) {
         i += 1;
     }
 
+    let nextStr = subStr.slice(i + 2);
     const total = ~~numChar;
     const newArray = [];
     if ( total === 0 ) {
-        return newArray;
+        return [
+            newArray,
+            nextStr,
+        ];
     }
 
-    let nextStr = subStr.slice(i + 2);
     for ( let a = 0; a < total; a++ ) {
         let result;
         [ result, nextStr ] = extractValue(nextStr, topLevel);
@@ -241,7 +133,7 @@ export function extractArray ( subStr, topLevel = false ) {
     ];
 }
 
-export function extractValue ( subStr, topLevel = false ) {
+export function extractValue ( subStr, topLevel = false ): [extractedValueType, string] {
     const type = subStr.charAt(0);
     const getter = coerceTypes[ type ];
 
@@ -259,13 +151,7 @@ export function extractValue ( subStr, topLevel = false ) {
             return extractArray(subStr, topLevel);
 
         default:
-            // let [
-            //     result,
-            //     nextStr,
-            // ] = getter(subStr);
-
             return getter(subStr);
-
     }
 }
 
@@ -292,7 +178,7 @@ export function connect ( config ) {
         try {
             for await ( const data of conn ) {
                 const dataStr = data.toString();
-                console.log(dataStr);
+                // console.log(dataStr);
                 let result;
                 let nextStr = dataStr;
                 let topLevel = true;
