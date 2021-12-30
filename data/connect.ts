@@ -59,11 +59,15 @@ export function makeOptions ( redisConfig ) {
 
 export function connect ( config ) {
     const options = makeOptions(config);
-    const connections = Array.from({ "length": options.poolMax }, async () => {
-        const conn = await net.createConnection(options.path);
-        conn.write(`CLIENT SETNAME ${options.connectionName}\r\n`);
-        return conn;
-    });
+
+    const connections = Array.from(
+        { "length": options.poolMax },
+        () => {
+            const conn = net.createConnection(options.path);
+            conn.write(`CLIENT SETNAME ${options.connectionName}\r\n`);
+            return conn;
+        }
+    );
 
     const usingMap = new Map();
     let inUse = 0;
@@ -76,7 +80,7 @@ export function connect ( config ) {
                 let timer = setTimeout(() => {
                     clearTimeout(timer);
                     resolve(run(prefix));
-                }, 500) // @TODO - exponential backoff
+                }, 100) // @TODO - exponential backoff
             });
             return await recursive;
         }
@@ -89,7 +93,9 @@ export function connect ( config ) {
 
         // conn.write(`CLIENT SETNAME ${options.connectionName}\r\n`);
         conn.write(`EXISTS ${prefix}:map\r\n`);
-        conn.write(`HMGET ${prefix}:map a b c d\r\n`);
+        conn.write(`HMGETA ${prefix}:map a b c d\r\n`);
+        conn.write(`HMGETB ${prefix}:map3 a b c d1\r\n`);
+        conn.write(`HMGETC ${prefix}:map2 a b c d2\r\n`);
         conn.write(`HGETALL ${prefix}:map\r\n`);
 
         try {
