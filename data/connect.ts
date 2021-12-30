@@ -4,7 +4,7 @@ import net from "net";
 
 import {
     extractValue,
-} from "./parser";
+} from "./parser.js";
 
 export interface IRedisOptions {
     /**
@@ -21,7 +21,7 @@ export interface IRedisOptions {
 };
 
 export const REDIS_DEFAULTS: IRedisOptions = {
-    "poolMax": 6,
+    "poolMax": 1,
     "db": 0,
     "prefix": ``,
     "path": ``,
@@ -35,6 +35,7 @@ export function makeOptions ( redisConfig ) {
     const options: IRedisOptions = {
         ...REDIS_DEFAULTS,
         ...redisConfig,
+        "connectionName": `libredis-${process.pid}-${Date.now()}`,
     };
 
     if ( !redisConfig ) {
@@ -58,33 +59,38 @@ export function makeOptions ( redisConfig ) {
 
 export function connect ( config ) {
     const options = makeOptions(config);
-    const baseArray = [ ...new Array(options.poolMax) ];
-    let connections = baseArray.map(() => {
-        return net.createConnection(options.path);
+    const connections = Array.from({ "length": options.poolMax }, async () => {
+        const conn = await net.createConnection(options.path);
+        conn.write(`CLIENT SETNAME ${options.connectionName}\r\n`);
+        return conn;
     });
 
     const usingMap = new Map();
     let inUse = 0;
     let nextUp = 0;
-    return async function* getPrefix ( prefix = `app` ) {
+    return async function* run ( prefix = `app` ) {
         const index = nextUp % connections.length;
 
         if ( usingMap.has(index) ) {
-            let timer = setTimeout(async () => {
-                clearTimeout(timer);
-                await getPrefix(prefix);
-            }, 500); // @TODO - exponential backoff
-            return timer;
+            const recursive = new Promise(resolve => {
+                let timer = setTimeout(() => {
+                    clearTimeout(timer);
+                    resolve(run(prefix));
+                }, 500) // @TODO - exponential backoff
+            });
+            return await recursive;
         }
 
         usingMap.set(index, true);
-        const conn = connections[ index ];
+        const conn = await connections[ index ];
 
         inUse = index;
         nextUp = inUse + 1;
 
+        // conn.write(`CLIENT SETNAME ${options.connectionName}\r\n`);
         conn.write(`EXISTS ${prefix}:map\r\n`);
         conn.write(`HMGET ${prefix}:map a b c d\r\n`);
+        conn.write(`HGETALL ${prefix}:map\r\n`);
 
         try {
             for await ( const data of conn ) {
@@ -108,5 +114,3 @@ export function connect ( config ) {
         return conn;
     }
 }
-
-

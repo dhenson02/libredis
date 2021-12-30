@@ -23,6 +23,18 @@ export function isCarriageReturn ( char: string ): boolean {
     return char === `\r`;
 }
 
+export function getSimpleString ( subStr: string ): [ extractedValueType, string ] {
+    let i = 1;
+    while ( !isCarriageReturn(subStr.charAt(i)) ) {
+        i += 1;
+    }
+
+    return [
+        subStr.slice(1, i),
+        subStr.slice(i + 2),
+    ];
+}
+
 export function getBulkString ( subStr: string ): [ extractedValueType, string ] {
     // $-1 is null value inside array
     if ( subStr.charAt(1) === `-` ) {
@@ -125,10 +137,7 @@ export function extractValue ( subStr: string ): [ extractedValueType | extracte
             return extractArray(subStr);
 
         case `+`:
-            return [
-                subStr.slice(1, -2),
-                ``,
-            ];
+            return getSimpleString(subStr);
 
         case `$`:
             return getBulkString(subStr);
@@ -140,10 +149,7 @@ export function extractValue ( subStr: string ): [ extractedValueType | extracte
             return getNumber(subStr);
 
         default:
-            return [
-                subStr,
-                ``,
-            ];
+            throw new Error(`Tried to parse invalid RESP string (type ${type}): ${subStr}`);
     }
 }
 

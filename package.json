@@ -6,7 +6,6 @@
     "main": "build/index.js",
     "scripts": {
         "start": "npm run tsc && npm run app",
-        "start-dev": "npm-run-all --parallel tsc-dev app ",
         "app": "node build/index.js",
         "tsc": "tsc",
         "tsc-dev": "tsc --watch",

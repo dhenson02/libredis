@@ -38,7 +38,7 @@ function reForkThread () {
         // }
     });
 }
-
+// export function init ()
 if ( isMainThread ) {
     reForkThread();
 }
@@ -51,8 +51,6 @@ else {
      * - Queue data in/out correctly
      *
      */
-
-
 
 
 }
