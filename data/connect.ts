@@ -25,8 +25,8 @@ export const REDIS_DEFAULTS: IRedisOptions = {
     "db": 0,
     "prefix": ``,
     "path": ``,
-    "host": ``,
-    "port": 0,
+    "host": `127.0.0.1`,
+    "port": 6379,
     "keyPrefix": ``,
     "connectionName": ``,
 }
@@ -93,9 +93,9 @@ export function connect ( config ) {
 
         // conn.write(`CLIENT SETNAME ${options.connectionName}\r\n`);
         conn.write(`EXISTS ${prefix}:map\r\n`);
-        conn.write(`HMGETA ${prefix}:map a b c d\r\n`);
-        conn.write(`HMGETB ${prefix}:map3 a b c d1\r\n`);
-        conn.write(`HMGETC ${prefix}:map2 a b c d2\r\n`);
+        conn.write(`HKEYS ${prefix}:map\r\n`);
+        conn.write(`HMGET ${prefix}:map a b c d1\r\n`);
+        conn.write(`HGETALL ${prefix}:map\r\n`);
         conn.write(`HGETALL ${prefix}:map\r\n`);
 
         try {
