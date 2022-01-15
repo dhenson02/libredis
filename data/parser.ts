@@ -169,7 +169,8 @@ export function parseFromJSON ( string: string ) {
 }
 
 export function stringifyToJSON ( data ) {
-    if (( data ?? null ) === null ||
+    if (
+        ( data ?? null ) === null ||
         (typeof data === NUMBER && isNaN(data))
     ) {
         return NULL_JSON;

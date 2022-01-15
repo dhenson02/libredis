@@ -18,6 +18,7 @@ export interface IRedisOptions {
     "port": number|string;
     "keyPrefix": string;
     "connectionName": string;
+    "debug": boolean;
 };
 
 export const REDIS_DEFAULTS: IRedisOptions = {
@@ -25,11 +26,13 @@ export const REDIS_DEFAULTS: IRedisOptions = {
     "db": 0,
     "prefix": ``,
     "path": ``,
-    "host": `127.0.0.1`,
+    "host": ``,
+    // "host": `127.0.0.1`,
     "port": 6379,
     "keyPrefix": ``,
     "connectionName": ``,
-}
+    "debug": false,
+};
 
 export function makeOptions ( redisConfig ) {
     const options: IRedisOptions = {
@@ -64,6 +67,7 @@ export function connect ( config ) {
         { "length": options.poolMax },
         () => {
             const conn = net.createConnection(options.path);
+            // conn.allowHalfOpen = true;
             conn.write(`CLIENT SETNAME ${options.connectionName}\r\n`);
             return conn;
         }
@@ -91,14 +95,26 @@ export function connect ( config ) {
         inUse = index;
         nextUp = inUse + 1;
 
-        // conn.write(`CLIENT SETNAME ${options.connectionName}\r\n`);
-        conn.write(`EXISTS ${prefix}:map\r\n`);
-        conn.write(`HKEYS ${prefix}:map\r\n`);
-        conn.write(`HMGET ${prefix}:map a b c d1\r\n`);
-        conn.write(`HGETALL ${prefix}:map\r\n`);
-        conn.write(`HGETALL ${prefix}:map\r\n`);
 
         try {
+
+            if ( conn.isPaused() ) {
+                await conn.resume();
+            }
+            await conn.cork();
+
+            conn.write(`EXISTS ${prefix}:map\r\n`);
+            conn.write(`HKEYS ${prefix}:map\r\n`);
+            conn.write(`HMGET ${prefix}:map a b c d1\r\n`);
+            conn.write(`HGETALL ${prefix}:map\r\n`);
+            conn.write(`HGETALL ${prefix}:map\r\n`);
+            conn.write(`INFO keys\r\n`);
+
+            console.log(`Connection ${options.connectionName} prefix ${prefix}`);
+            console.log(conn.isPaused(), conn.destroyed, conn.connecting, conn.readable, conn.writable);
+
+            await conn.uncork();
+
             for await ( const data of conn ) {
                 const dataStr = data.toString();
                 let result;
@@ -108,10 +124,19 @@ export function connect ( config ) {
                     yield result;
                 }
                 while ( nextStr );
+                await conn.destroy();
             }
         }
         catch ( error ) {
             console.error(error);
+        }
+
+        if ( options.debug === true ) {
+            console.log(`Connection ${conn.destroyed ? 'destroyed' : conn.connecting ? 'connecting' : conn.isPaused() ? 'isPaused' : '...is something...'} ${options.connectionName} prefix ${prefix}`);
+        }
+
+        if ( conn.destroyed ) {
+            await conn.connect(options.path);
         }
 
         nextUp = index;
