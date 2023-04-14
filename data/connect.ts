@@ -104,10 +104,10 @@ export function connect ( config ) {
             }
             await conn.cork();
 
-            conn.write(`HMSET ${prefix}:map a 1 b 2 c 3 d1 4\r\n`);
+            conn.write(`HMSET ${prefix}:map a 1 b 2 c 3 d 4\r\n`);
             conn.write(`EXISTS ${prefix}:map\r\n`);
             conn.write(`HKEYS ${prefix}:map\r\n`);
-            conn.write(`HMGET ${prefix}:map a b c d1\r\n`);
+            conn.write(`HMGET ${prefix}:map a b c d\r\n`);
             conn.write(`HGETALL ${prefix}:map\r\n`);
             conn.write(`HGETALL ${prefix}:map\r\n`);
             conn.write(`INFO keys\r\n`);
