@@ -1,6 +1,6 @@
 "use strict";
 
-import net from "net";
+import net from "node:net";
 
 import {
     extractValue,
@@ -15,7 +15,7 @@ export interface IRedisOptions {
     "prefix": string;
     "path": string;
     "host": string;
-    "port": number|string;
+    "port": number;
     "keyPrefix": string;
     "connectionName": string;
     "debug": boolean;
@@ -26,8 +26,8 @@ export const REDIS_DEFAULTS: IRedisOptions = {
     "db": 0,
     "prefix": ``,
     "path": ``,
-    "host": ``,
-    // "host": `127.0.0.1`,
+    // "host": ``,
+    "host": `127.0.0.1`,
     "port": 6379,
     "keyPrefix": ``,
     "connectionName": ``,
@@ -66,7 +66,9 @@ export function connect ( config ) {
     const connections = Array.from(
         { "length": options.poolMax },
         () => {
-            const conn = net.createConnection(options.path);
+            let conn = options.path
+                ? net.createConnection(options.path)
+                : net.createConnection(options.port, options.host);
             // conn.allowHalfOpen = true;
             conn.write(`CLIENT SETNAME ${options.connectionName}\r\n`);
             return conn;
@@ -95,7 +97,6 @@ export function connect ( config ) {
         inUse = index;
         nextUp = inUse + 1;
 
-
         try {
 
             if ( conn.isPaused() ) {
@@ -103,6 +104,7 @@ export function connect ( config ) {
             }
             await conn.cork();
 
+            conn.write(`HMSET ${prefix}:map a 1 b 2 c 3 d1 4\r\n`);
             conn.write(`EXISTS ${prefix}:map\r\n`);
             conn.write(`HKEYS ${prefix}:map\r\n`);
             conn.write(`HMGET ${prefix}:map a b c d1\r\n`);
@@ -110,8 +112,10 @@ export function connect ( config ) {
             conn.write(`HGETALL ${prefix}:map\r\n`);
             conn.write(`INFO keys\r\n`);
 
-            console.log(`Connection ${options.connectionName} prefix ${prefix}`);
-            console.log(conn.isPaused(), conn.destroyed, conn.connecting, conn.readable, conn.writable);
+            if ( options.debug === true ) {
+                console.log(`Connection ${options.connectionName} prefix ${prefix}`);
+                console.log(conn.isPaused(), conn.destroyed, conn.connecting, conn.readable, conn.writable);
+            }
 
             await conn.uncork();
 
@@ -136,7 +140,9 @@ export function connect ( config ) {
         }
 
         if ( conn.destroyed ) {
-            await conn.connect(options.path);
+            await options.path
+                ? conn.connect(options.path)
+                : conn.connect(options.port, options.host);
         }
 
         nextUp = index;
