@@ -14,7 +14,8 @@ import {
     getSimpleString,
     getBulkString,
     isCarriageReturn,
-    // stringifyToJSON,
+    parseFromJSON,
+    stringifyToJSON,
     extractArray,
     extractValue,
     NULL_JSON,
@@ -255,6 +256,40 @@ describe('extractValue', () => {
         ] = extractValue('$-1\r\n');
         expect(value).to.be.null;
         expect(remainder).to.equal('');
+    });
+});
+
+describe('parseFromJSON', () => {
+    it('parses valid JSON', () => {
+        const result = parseFromJSON('{"foo": "bar"}');
+        expect(result).to.deep.equal({ foo: 'bar' });
+    });
+
+    it('returns null for invalid JSON', () => {
+        const result = parseFromJSON('{foo: "bar"}');
+        expect(result).to.be.null;
+    });
+});
+
+describe('stringifyToJSON', () => {
+    it('stringifies an object', () => {
+        const result = stringifyToJSON({ foo: 'bar' });
+        expect(result).to.equal('{"foo":"bar"}');
+    });
+
+    it('stringifies an array', () => {
+        const result = stringifyToJSON([ 'foo', 'bar' ]);
+        expect(result).to.equal('["foo","bar"]');
+    });
+
+    it('returns null JSON for null input', () => {
+        const result = stringifyToJSON(null);
+        expect(result).to.equal('null');
+    });
+
+    it('returns null JSON for NaN', () => {
+        const result = stringifyToJSON(NaN);
+        expect(result).to.equal('null');
     });
 });
 
