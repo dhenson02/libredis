@@ -8,6 +8,10 @@ envInit();
 
 import { run } from "./api/index.js";
 
+/**
+ * This file is used as an demonstration of connect.ts async handling 
+ * and connection pooling/management
+ */
 
 (async () => {
     const redis = run(`a`);
