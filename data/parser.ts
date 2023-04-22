@@ -9,6 +9,9 @@ export type extractedValueType = (
     string | number | Error | null
 );
 
+/**
+ * CONSTANTS FOR COMPARISONS
+ */
 export const NULL_JSON = JSON.stringify(null);
 export const ZERO_JSON = JSON.stringify(0);
 export const EMPTY_STRING_JSON = JSON.stringify(``);
@@ -19,10 +22,24 @@ export const OBJECT = `object`;
 export const STRING = `string`;
 export const NUMBER = `number`;
 
+/**
+ * Check for carriage return (Mac new line char): "\r"
+ * 
+ * @param {string} char 
+ * @returns {boolean}
+ */
 export function isCarriageReturn ( char: string ): boolean {
     return char === `\r`;
 }
 
+/**
+ * getSimpleString(subStr)
+ * 
+ * Extracts a simple string from a Redis RESP string.
+ * 
+ * @param {string} subStr The RESP string to extract a simple string from.
+ * @returns {[string, string]} The extracted simple string and the remaining RESP string.
+ */
 export function getSimpleString ( subStr: string ): [ extractedValueType, string ] {
     let i = 1;
     while ( !isCarriageReturn(subStr.charAt(i)) ) {
@@ -35,6 +52,14 @@ export function getSimpleString ( subStr: string ): [ extractedValueType, string
     ];
 }
 
+/**
+ * getBulkString(subStr)
+ * 
+ * Extracts a bulk string from a Redis RESP string.
+ * 
+ * @param {string} subStr The RESP string to extract a bulk string from. 
+ * @returns {[string|null, string]} The extracted bulk string or null and the remaining RESP string.
+ */
 export function getBulkString ( subStr: string ): [ extractedValueType, string ] {
     // $-1 is null value inside array
     if ( subStr.charAt(1) === `-` ) {
@@ -60,6 +85,14 @@ export function getBulkString ( subStr: string ): [ extractedValueType, string ]
     ];
 }
 
+/**
+ * getNumber(subStr) 
+ * 
+ * Extracts a number from a Redis RESP string.
+ * 
+ * @param {string} subStr The RESP string to extract a number from.
+ * @returns {[number, string]} The extracted number and the remaining RESP string.
+ */
 export function getNumber ( subStr: string ): [ extractedValueType, string ] {
     let i = 1;
     let char = ``;
@@ -77,6 +110,14 @@ export function getNumber ( subStr: string ): [ extractedValueType, string ] {
     ];
 }
 
+/**
+ * getError(subStr)
+ * 
+ * Extracts an error from a Redis RESP string.
+ * 
+ * @param {string} subStr The RESP string to extract an error from.
+ * @returns {[Error, string]} The extracted error and the remaining RESP string.
+ */
 export function getError ( subStr: string ): [ extractedValueType, string ] {
     let i = 1;
     while ( !isCarriageReturn(subStr.charAt(i)) ) {
@@ -89,6 +130,14 @@ export function getError ( subStr: string ): [ extractedValueType, string ] {
     ];
 }
 
+/**
+ * extractArray(subStr)
+ * 
+ * Extracts an array from a Redis RESP string.
+ * 
+ * @param {string} subStr The RESP string to extract an array from.
+ * @returns {[extractedValueType[], string]} The extracted array and the remaining RESP string.
+ */
 export function extractArray ( subStr: string ): [ extractedValueType[], string ] {
     let numChar = ``;
     let i = 1;
@@ -123,6 +172,19 @@ export function extractArray ( subStr: string ): [ extractedValueType[], string 
     ];
 }
 
+/**
+ * extractValue(subStr) 
+ * 
+ * Extracts a value from a Redis RESP string.
+ * 
+ * @param {string} subStr The RESP string to extract a value from.
+ * @returns {[extractedValueType | extractedValueType[], string]} The extracted value and the remaining RESP string. The extracted value can be:
+ *     - null
+ *     - Array<string|number|Error|null|extractedValueType> 
+ *     - string
+ *     - number 
+ *     - Error
+ */
 export function extractValue ( subStr: string ): [ extractedValueType | extractedValueType[], string ] {
     const type = subStr.charAt(0);
 
@@ -153,6 +215,14 @@ export function extractValue ( subStr: string ): [ extractedValueType | extracte
     }
 }
 
+/**
+ * parseFromJSON(string)
+ * 
+ * Parses a JSON string into JavaScript object.
+ * 
+ * @param {string} string The JSON string to parse.
+ * @returns {*} The parsed JavaScript object if the string is valid JSON, otherwise null.
+ */
 export function parseFromJSON ( string: string ) {
     if ( typeof string !== STRING ) {
         return null;
@@ -168,6 +238,18 @@ export function parseFromJSON ( string: string ) {
     return null;
 }
 
+/**
+ * stringifyToJSON(data)
+ * 
+ * Converts data to JSON string.
+ * 
+ * @param {*} data The data to convert to JSON. Can be: 
+ *     - null: Returns "null" JSON string.
+ *     - NaN: Returns "null" JSON string.
+ *     - Array: Returns JSON string of the array in the format [value1, value2, ...].  
+ *     - Other: Passes to JSON.stringify() and returns result.
+ * @returns {string} JSON string representation of data.
+ */
 export function stringifyToJSON ( data ) {
     if (
         ( data ?? null ) === null ||
