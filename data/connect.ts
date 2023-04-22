@@ -83,10 +83,9 @@ export function connect ( config ) {
 
         if ( usingMap.has(index) ) {
             const recursive = new Promise(resolve => {
-                let timer = setTimeout(() => {
-                    clearTimeout(timer);
+                setTimeout(() => {
                     resolve(run(prefix));
-                }, 100) // @TODO - exponential backoff
+                }, 10) // @TODO - exponential backoff maybe
             });
             return await recursive;
         }
@@ -128,7 +127,12 @@ export function connect ( config ) {
                     yield result;
                 }
                 while ( nextStr );
-                await conn.destroy();
+
+                // neither of these appears to be closing the connection
+                // so use the one without error (.end) for now
+
+                // await conn.destroy();
+                await conn.end();
             }
         }
         catch ( error ) {
