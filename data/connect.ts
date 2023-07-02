@@ -119,14 +119,15 @@ export function connect ( config ) {
             await conn.uncork();
 
             for await ( const data of conn ) {
-                const dataStr = data.toString();
                 let result;
-                let nextStr = dataStr;
+                // let next = data;
+                let dataSize = data.length;
+                let nextIndex = 0;
                 do {
-                    [ result, nextStr ] = extractValue(nextStr);
+                    [ result, nextIndex ] = extractValue(data, nextIndex);
                     yield result;
                 }
-                while ( nextStr );
+                while ( nextIndex < dataSize );
 
                 // neither of these appears to be closing the connection
                 // so use the one without error (.end) for now

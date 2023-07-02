@@ -48,214 +48,232 @@ describe('parser defaults', () => {
 });
 
 describe('isCarriageReturn', () => {
-    it('returns true for \\r', () => {
-        expect(isCarriageReturn('\r')).to.be.true;
+    it('returns true for \\r (and \\r\\n because 2 chars instead of 1, first char results in pass)', () => {
+        expect(isCarriageReturn(Buffer.from('\r').at(0))).to.be.true;
     });
 
     it('returns false for non-\\r', () => {
-        expect(isCarriageReturn('f')).to.be.false;
-        expect(isCarriageReturn('\n')).to.be.false;
-        expect(isCarriageReturn('\s')).to.be.false;
-        expect(isCarriageReturn('\r\n')).to.be.false;
-        expect(isCarriageReturn('\t')).to.be.false;
+        expect(isCarriageReturn(Buffer.from('f').at(0))).to.be.false;
+        expect(isCarriageReturn(Buffer.from('\n').at(0))).to.be.false;
+        expect(isCarriageReturn(Buffer.from('\s').at(0))).to.be.false;
+        expect(isCarriageReturn(Buffer.from('\t').at(0))).to.be.false;
     });
 });
 
 describe('getSimpleString', () => {
     it('extracts a simple string', () => {
+        const dataBuffer = Buffer.from('+foo\r\n');
         const [
             value,
             remainder,
-        ] = getSimpleString('+foo\r\n');
+        ] = getSimpleString(dataBuffer, 0);
         expect(value).to.equal('foo');
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 
     it('handles escaped characters', () => {
+        const dataBuffer = Buffer.from('+\\r\\nfoo\r\n');
         const [
             value,
             remainder,
-        ] = getSimpleString('+\\r\\nfoo\r\n');
+        ] = getSimpleString(dataBuffer, 0);
         expect(value).to.equal('\\r\\nfoo');
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 });
 
 describe('getBulkString', () => {
     it('extracts a null bulk string', () => {
+        const dataBuffer = Buffer.from('$-1\r\n');
         const [
             value,
             remainder,
-        ] = getBulkString('$-1\r\n');
+        ] = getBulkString(dataBuffer, 0);
         expect(value).to.be.null;
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 
     it('extracts a non-null bulk string', () => {
+        const dataBuffer = Buffer.from('$3\r\nfoo\r\n');
         const [
             value,
             remainder,
-        ] = getBulkString('$3\r\nfoo\r\n');
+        ] = getBulkString(dataBuffer, 0);
         expect(value).to.equal('foo');
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 
     it('handles escaped characters', () => {
+        const dataBuffer = Buffer.from('$7\r\n\\r\\nfoo\r\n');
         const [
             value,
             remainder,
-        ] = getBulkString('$7\r\n\\r\\nfoo\r\n');
+        ] = getBulkString(dataBuffer, 0);
         expect(value).to.equal('\\r\\nfoo');
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 
     it('handles multiple values', () => {
+        const dataBuffer = Buffer.from('$3\r\nfoo\r\n$3\r\nbar\r\n');
         let [
             value,
             remainder,
-        ] = getBulkString('$3\r\nfoo\r\n$3\r\nbar\r\n');
+        ] = getBulkString(dataBuffer, 0);
         expect(value).to.equal('foo');
         [
             value,
             remainder,
-        ] = getBulkString(remainder);
+        ] = getBulkString(dataBuffer, remainder);
         expect(value).to.equal('bar');
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 });
 
 describe('getNumber', () => {
     it('extracts a positive number', () => {
+        const dataBuffer = Buffer.from('$3\r\n');
         const [
             value,
             remainder
-        ] = getNumber('$3\r\n');
+        ] = getNumber(dataBuffer, 0);
         expect(value).to.equal(3);
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 
     it('extracts a negative number', () => {
+        const dataBuffer = Buffer.from('$-5\r\n');
         const [
             value,
             remainder,
-        ] = getNumber('$-5\r\n');
+        ] = getNumber(dataBuffer, 0);
         expect(value).to.equal(-5);
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
     it('handles leading zeros', () => {
+        const dataBuffer = Buffer.from('$005\r\n');
         const [
             value,
             remainder,
-        ] = getNumber('$005\r\n');
+        ] = getNumber(dataBuffer, 0);
         expect(value).to.equal(5);
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 });
 
 describe('getError', () => {
     it('extracts an error', () => {
+        const dataBuffer = Buffer.from('-ERR Invalid request\r\n');
         const [
             value,
             remainder,
-        ] = getError('-ERR Invalid request\r\n');
+        ] = getError(dataBuffer, 0);
         expect(value).instanceOf(Error);
         if ( value instanceof Error ) {
             expect(value.message).to.equal("ERR Invalid request");
         }
         // expect(value).to.equal(new Error('ERR Invalid request'));
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
     it('handles escaped characters', () => {
+        const dataBuffer = Buffer.from('-ERR Invalid \\r\\n request\r\n');
         const [
             value,
             remainder,
-        ] = getError('-ERR Invalid \\r\\n request\r\n');
+        ] = getError(dataBuffer, 0);
 
         expect(value).instanceOf(Error);
         if ( value instanceof Error ) {
             expect(value.message).to.equal('ERR Invalid \\r\\n request');
         }
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 });
 
 describe('extractArray', () => {
     it('extracts an empty array', () => {
+        const dataBuffer = Buffer.from('*0\r\n');
         const [
             value,
             remainder,
-        ] = extractArray('*0\r\n');
+        ] = extractArray(dataBuffer, 0);
         expect(value).to.deep.equal([]);
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 
     it('extracts an array with one value', () => {
+        const dataBuffer = Buffer.from('*1\r\n$3\r\nfoo\r\n');
         const [
             value,
             remainder,
-        ] = extractArray('*1\r\n$3\r\nfoo\r\n');
+        ] = extractArray(dataBuffer, 0);
         expect(value).to.deep.equal([ 'foo' ]);
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 
     it('extracts an array with multiple values', () => {
+        const dataBuffer = Buffer.from('*3\r\n$3\r\nfoo\r\n$3\r\nbar\r\n$5\r\nhello\r\n');
         const [
             value,
             remainder,
-        ] = extractArray('*3\r\n$3\r\nfoo\r\n$3\r\nbar\r\n$5\r\nhello\r\n');
+        ] = extractArray(dataBuffer, 0);
         expect(value).to.deep.equal([
             'foo',
             'bar',
             'hello'
         ]);
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 });
 
 describe('extractValue', () => {
     it('extracts a simple string value', () => {
+        const dataBuffer = Buffer.from('+foo\r\n');
         const [
             value,
             remainder,
-        ] = extractValue('+foo\r\n');
+        ] = extractValue(dataBuffer, 0);
         expect(value).to.equal('foo');
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 
     it('extracts a bulk string value', () => {
+        const dataBuffer = Buffer.from('$3\r\nfoo\r\n');
         const [
             value,
             remainder,
-        ] = extractValue('$3\r\nfoo\r\n');
+        ] = extractValue(dataBuffer, 0);
         expect(value).to.equal('foo');
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 
     it('extracts an integer value', () => {
+        const dataBuffer = Buffer.from(':5\r\n');
         const [
             value,
             remainder,
-        ] = extractValue(':5\r\n');
+        ] = extractValue(dataBuffer, 0);
         expect(value).to.equal(5);
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 
     it('extracts a float value', () => {
+        const dataBuffer = Buffer.from(':0035\r\n');
         const [
             value,
             remainder,
-        ] = extractValue(':0035\r\n');
+        ] = extractValue(dataBuffer, 0);
         expect(value).to.equal(35);
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 
     it('extracts a null value', () => {
+        const dataBuffer = Buffer.from('$-1\r\n');
         const [
             value,
             remainder,
-        ] = extractValue('$-1\r\n');
+        ] = extractValue(dataBuffer, 0);
         expect(value).to.be.null;
-        expect(remainder).to.equal('');
+        expect(remainder).to.equal(dataBuffer.length);
     });
 });
 

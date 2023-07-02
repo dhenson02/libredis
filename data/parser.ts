@@ -22,204 +22,220 @@ export const OBJECT = `object`;
 export const STRING = `string`;
 export const NUMBER = `number`;
 
+const ASTERISK_CODE: number = `*`.charCodeAt(0);
+const PLUS_CODE: number = `+`.charCodeAt(0);
+const DOLLAR_CODE: number = `$`.charCodeAt(0);
+const DASH_CODE: number = `-`.charCodeAt(0);
+const COLON_CODE: number = `:`.charCodeAt(0);
+const CARR_RETURN_CODE: number = `\r`.charCodeAt(0);
+
 /**
  * Check for carriage return (Mac new line char): "\r"
- * 
- * @param {string} char 
+ *
+ * @param {number} charCode
  * @returns {boolean}
  */
-export function isCarriageReturn ( char: string ): boolean {
-    return char === `\r`;
+export function isCarriageReturn ( charCode: number ): boolean {
+    return charCode === CARR_RETURN_CODE;
 }
 
 /**
- * getSimpleString(subStr)
- * 
+ * getSimpleString(bufferData)
+ *
  * Extracts a simple string from a Redis RESP string.
- * 
- * @param {string} subStr The RESP string to extract a simple string from.
- * @returns {[string, string]} The extracted simple string and the remaining RESP string.
+ *
+ * @param {Buffer} bufferData The RESP string to extract a simple string from.
+ * @param {number} currentIndex Where our data begins inside dataBuffer
+ * @returns {[string, number]} The extracted simple string and the remaining RESP string.
  */
-export function getSimpleString ( subStr: string ): [ extractedValueType, string ] {
-    let i = 1;
-    while ( !isCarriageReturn(subStr.charAt(i)) ) {
+export function getSimpleString ( bufferData: Buffer, currentIndex: number ): [ string, number ] {
+    let i = currentIndex + 1;
+    while ( !isCarriageReturn(bufferData.at(i)) ) {
         i += 1;
     }
 
     return [
-        subStr.slice(1, i),
-        subStr.slice(i + 2),
+        bufferData.toString(`utf8`, currentIndex + 1, i),
+        i + 2,
     ];
 }
 
 /**
- * getBulkString(subStr)
- * 
+ * getBulkString(bufferData)
+ *
  * Extracts a bulk string from a Redis RESP string.
- * 
- * @param {string} subStr The RESP string to extract a bulk string from. 
+ *
+ * @param {Buffer} bufferData The RESP string to extract a bulk string from.
+ * @param {number} currentIndex Where our data begins inside dataBuffer
  * @returns {[string|null, string]} The extracted bulk string or null and the remaining RESP string.
  */
-export function getBulkString ( subStr: string ): [ extractedValueType, string ] {
+export function getBulkString ( bufferData: Buffer, currentIndex: number ): [ extractedValueType, number ] {
+    let i = currentIndex + 1;
+
     // $-1 is null value inside array
-    if ( subStr.charAt(1) === `-` ) {
+    if ( bufferData.at(i) === DASH_CODE ) {
         return [
             null,
-            subStr.slice(5),
+            currentIndex + 5,
         ];
     }
 
-    let i = 1;
-    let charCount = ``;
-    let current = subStr.charAt(i);
+    let current = bufferData.at(i);
     do {
-        charCount += current;
         i += 1;
-        current = subStr.charAt(i);
+        current = bufferData.at(i);
     }
     while ( !isCarriageReturn(current) );
 
+    const charCount = ~~bufferData.subarray(currentIndex + 1, i);
+
     return [
-        subStr.slice(i + 2, i + 2 + ~~charCount),
-        subStr.slice(i + 2 + ~~charCount + 2),
+        bufferData.toString(`utf8`, i + 2, i + 2 + charCount),
+        // go past char count + \r\n + all the chars in the string + \r\n
+        i + 2 + charCount + 2,
     ];
 }
 
 /**
- * getNumber(subStr) 
- * 
+ * getNumber(bufferData)
+ *
  * Extracts a number from a Redis RESP string.
- * 
- * @param {string} subStr The RESP string to extract a number from.
- * @returns {[number, string]} The extracted number and the remaining RESP string.
+ *
+ * @param {Buffer} bufferData The RESP string to extract a number from.
+ * @param {number} currentIndex Where our data begins inside dataBuffer
+ * @returns {[number, number]} The extracted number and the remaining RESP string.
  */
-export function getNumber ( subStr: string ): [ extractedValueType, string ] {
-    let i = 1;
-    let char = ``;
-    let current = subStr.charAt(i);
+export function getNumber ( bufferData: Buffer, currentIndex: number ): [ extractedValueType, number ] {
+    let i = currentIndex + 1;
+    let current = bufferData.at(i);
     do {
-        char += current;
         i += 1;
-        current = subStr.charAt(i);
+        current = bufferData.at(i);
     }
     while ( !isCarriageReturn(current) );
 
     return [
-        ~~char,
-        subStr.slice(i + 2),
+        ~~bufferData.subarray(currentIndex + 1, i),
+        i + 2,
     ];
 }
 
 /**
- * getError(subStr)
- * 
+ * getError(bufferData)
+ *
  * Extracts an error from a Redis RESP string.
- * 
- * @param {string} subStr The RESP string to extract an error from.
- * @returns {[Error, string]} The extracted error and the remaining RESP string.
+ *
+ * @param {Buffer} bufferData The RESP string to extract an error from.
+ * @param {number} currentIndex Where our data begins inside dataBuffer
+ * @returns {[Error, number]} The extracted error and the remaining RESP string.
  */
-export function getError ( subStr: string ): [ extractedValueType, string ] {
-    let i = 1;
-    while ( !isCarriageReturn(subStr.charAt(i)) ) {
+export function getError ( bufferData: Buffer, currentIndex: number ): [ extractedValueType, number ] {
+    let i = currentIndex + 1;
+    while ( !isCarriageReturn(bufferData.at(i)) ) {
         i += 1;
     }
 
     return [
-        new Error(subStr.slice(1, i)),
-        subStr.slice(i + 2),
+        new Error(bufferData.toString(`utf8`, currentIndex + 1, i)),
+        i + 2,
     ];
 }
 
 /**
- * extractArray(subStr)
- * 
+ * extractArray(bufferData)
+ *
  * Extracts an array from a Redis RESP string.
- * 
- * @param {string} subStr The RESP string to extract an array from.
- * @returns {[extractedValueType[], string]} The extracted array and the remaining RESP string.
+ *
+ * @param {Buffer} bufferData The RESP string to extract an array from.
+ * @param {number} currentIndex Where our data begins inside dataBuffer
+ * @returns {[extractedValueType[], number]} The extracted array and the remaining RESP string.
  */
-export function extractArray ( subStr: string ): [ extractedValueType[], string ] {
-    let numChar = ``;
-    let i = 1;
-    let current = subStr.charAt(i);
+export function extractArray ( bufferData: Buffer, currentIndex: number ): [ extractedValueType[], number ] {
+    let i = currentIndex + 1;
+    let current = bufferData.at(i);
 
     do {
-        numChar += current;
         i += 1;
-        current = subStr.charAt(i);
+        current = bufferData.at(i);
     }
     while ( !isCarriageReturn(current) );
 
-    let nextStr = subStr.slice(i + 2);
-    const total = ~~numChar;
-    const newArray = new Array(total);
-    if ( total === 0 ) {
+    let nextIndex = i + 2;
+    const arraySize = ~~bufferData.subarray(currentIndex + 1, i);
+    const newArray = new Array(arraySize);
+    if ( arraySize === 0 ) {
         return [
             newArray,
-            nextStr,
+            nextIndex,
         ];
     }
 
-    for ( let a = 0; a < total; a++ ) {
+    for ( let a = 0; a < arraySize; a++ ) {
         let result;
-        [ result, nextStr ] = extractValue(nextStr);
+        [ result, nextIndex ] = extractValue(bufferData, nextIndex);
         newArray[ a ] = result;
     }
 
     return [
         newArray,
-        nextStr,
+        nextIndex,
     ];
 }
 
+
 /**
- * extractValue(subStr) 
- * 
+ * extractValue(bufferData)
+ *
  * Extracts a value from a Redis RESP string.
- * 
- * @param {string} subStr The RESP string to extract a value from.
- * @returns {[extractedValueType | extractedValueType[], string]} The extracted value and the remaining RESP string. The extracted value can be:
+ *
+ * @param {Buffer} bufferData The RESP string to extract a value from.
+ * @param {number} currentIndex Where our data begins inside dataBuffer
+ * @returns {[extractedValueType | extractedValueType[], number]}
+ *     The extracted value and the remaining RESP string. The extracted value can be:
  *     - null
- *     - Array<string|number|Error|null|extractedValueType> 
+ *     - Array<extractedValueType>
  *     - string
- *     - number 
+ *     - number
  *     - Error
  */
-export function extractValue ( subStr: string ): [ extractedValueType | extractedValueType[], string ] {
-    const type = subStr.charAt(0);
+export function extractValue ( bufferData: Buffer, currentIndex: number ): [ extractedValueType | extractedValueType[], number ] {
+    /**
+     * start at beginning of next chunk
+     */
+    const type = bufferData.at(currentIndex);
 
     switch ( type ) {
-        case `*`:
-            if ( subStr.charAt(1) === `-` ) {
+        case ASTERISK_CODE: // "*"
+            if ( bufferData.at(currentIndex + 1) === DASH_CODE ) {
                 return [
                     null,
-                    subStr.slice(5),
+                    currentIndex + 5,
                 ];
             }
-            return extractArray(subStr);
+            return extractArray(bufferData, currentIndex);
 
-        case `+`:
-            return getSimpleString(subStr);
+        case PLUS_CODE:     // "+"
+            return getSimpleString(bufferData, currentIndex);
 
-        case `$`:
-            return getBulkString(subStr);
+        case DOLLAR_CODE:   // "$"
+            return getBulkString(bufferData, currentIndex);
 
-        case `-`:
-            return getError(subStr);
+        case DASH_CODE:     // "-"
+            return getError(bufferData, currentIndex);
 
-        case `:`:
-            return getNumber(subStr);
+        case COLON_CODE:    // ":"
+            return getNumber(bufferData, currentIndex);
 
         default:
-            throw new Error(`Tried to parse invalid RESP string (type ${type}): ${subStr}`);
+            throw new Error(`Tried to parse invalid RESP string (type ${type}): ${bufferData.toString("utf8", currentIndex)}`);
     }
 }
 
 /**
  * parseFromJSON(string)
- * 
+ *
  * Parses a JSON string into JavaScript object.
- * 
+ *
  * @param {string} string The JSON string to parse.
  * @returns {*} The parsed JavaScript object if the string is valid JSON, otherwise null.
  */
@@ -240,13 +256,13 @@ export function parseFromJSON ( string: string ) {
 
 /**
  * stringifyToJSON(data)
- * 
+ *
  * Converts data to JSON string.
- * 
- * @param {*} data The data to convert to JSON. Can be: 
+ *
+ * @param {*} data The data to convert to JSON. Can be:
  *     - null: Returns "null" JSON string.
  *     - NaN: Returns "null" JSON string.
- *     - Array: Returns JSON string of the array in the format [value1, value2, ...].  
+ *     - Array: Returns JSON string of the array in the format [value1, value2, ...].
  *     - Other: Passes to JSON.stringify() and returns result.
  * @returns {string} JSON string representation of data.
  */
