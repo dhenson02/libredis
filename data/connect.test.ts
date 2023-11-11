@@ -5,6 +5,10 @@ import { expect } from "chai";
 import * as mocha from "mocha";
 
 import {
+    debugLogger,
+} from "../logger.js";
+
+import {
     RedisCommandError,
 } from "./parser.js";
 
@@ -33,7 +37,7 @@ describe("Main connection testing", async () => {
             `d`,
             `4`,
         ]);
-        redis.debugLogger(response);
+        debugLogger(response);
         expect(response).to.deep.equal([
             `OK`,
             `OK`,
@@ -50,7 +54,7 @@ describe("Main connection testing", async () => {
             `3`,
             `d`,
         ]);
-        redis.debugLogger(response);
+        debugLogger(response);
         const [ status, ] = response;
         expect(status).to.be.instanceOf(RedisCommandError);
         // expect(status.message).to.equal(`ERR wrong number of arguments for 'hmset' command`);
@@ -58,7 +62,7 @@ describe("Main connection testing", async () => {
 
     it("gets hashmap full data dump", async () => {
         const flattenedValues = await redis.hgetall(`def1`);
-        redis.debugLogger(flattenedValues);
+        debugLogger(flattenedValues);
         expect(flattenedValues)
             .to
             .deep
@@ -93,12 +97,12 @@ describe("Main connection testing", async () => {
                     `4`,
                 ]
             ]);
-        redis.debugLogger(values);
+        debugLogger(values);
     });
 
     it("gets error when missing individual field names for hashmap data", async () => {
         const values = await redis.hmget(`def1`, []);
-        redis.debugLogger(values);
+        debugLogger(values);
         const [ status, ] = values;
         expect(status).to.be.instanceOf(RedisCommandError);
         // expect(status.message).to.equal(`ERR wrong number of arguments for 'hmget' command`);
@@ -111,12 +115,12 @@ describe("Main connection testing", async () => {
         });
 
         const current = await redis.hgetall(`def2`);
-        redis.debugLogger(current);
+        debugLogger(current);
     }, 1000);
 
     it("drops these stupid connections", async () => {
         const total = await redis.drop();
-        redis.debugLogger(`Conns dropped: ${total}`);
+        debugLogger(`Conns dropped: ${total}`);
     });
 
 });

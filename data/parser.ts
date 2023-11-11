@@ -5,8 +5,18 @@ import {
     threadId,
 } from "worker_threads";
 
+import { debugLogger } from "../logger.js";
+
 export class RedisCommandError extends Error {
     name = `RedisCommandError`;
+
+    constructor ( msg: string|undefined ) {
+        super(msg);
+    }
+}
+
+export class RedisResponseError extends Error {
+    name = `RedisResponseError`;
 
     constructor ( msg: string|undefined ) {
         super(msg);
@@ -231,7 +241,7 @@ export function extractValue ( bufferData: Buffer, currentIndex: number ): [ ext
             return getNumber(bufferData, currentIndex);
 
         default:
-            throw new Error(`Tried to parse invalid RESP string (type ${type}): ${bufferData.toString("utf8", currentIndex)}`);
+            throw new RedisResponseError(`Tried to parse invalid RESP string (type ${type}): ${bufferData.toString("utf8", currentIndex)}`);
     }
 }
 
@@ -252,7 +262,7 @@ export function parseFromJSON ( string: string ) {
         return JSON.parse(string);
     }
     catch (e) {
-        console.log(`Invalid JSON provided - returning null`, string);
+        debugLogger(`Invalid JSON provided - returning null`, string);
     }
 
     return null;

@@ -2,9 +2,9 @@
 
 import net from "node:net";
 
-// import {
-//     debugLogger,
-// } from "../logger.js";
+import {
+    debugLogger,
+} from "../logger.js";
 
 import {
     extractValue,
@@ -79,19 +79,6 @@ export class Connect {
 
     #options: IRedisOptions;
 
-    debugLogger ( ...msg: any ) {
-        if ( this.#options.debug ) return console.log(...msg);
-    }
-
-    async* createResult ( cmd: string ) {
-        try {
-            yield* await this.#run(cmd);
-        }
-        catch (e: any) {
-            throw new RedisConnectError(e.message);
-        }
-    }
-
     constructor ( options: IRedisOptions ) {
         this.#options = makeOptions({
             ...REDIS_DEFAULTS,
@@ -152,8 +139,8 @@ export class Connect {
             // Run send full command to Redis
             conn.write(command);
 
-            this.debugLogger(`Connection ${this.#options.connectionName} prefix ${this.#options.keyPrefix}`);
-            this.debugLogger(conn.isPaused(), conn.destroyed, conn.connecting, conn.readable, conn.writable);
+            debugLogger(`Connection ${this.#options.connectionName} prefix ${this.#options.keyPrefix}`);
+            debugLogger(conn.isPaused(), conn.destroyed, conn.connecting, conn.readable, conn.writable);
 
             await conn.uncork();
 
@@ -180,7 +167,7 @@ export class Connect {
             console.error(error);
         }
 
-        this.debugLogger(`Connection ${conn.destroyed ? 'destroyed' : conn.connecting ? 'connecting' : conn.isPaused() ? 'isPaused' : '...is something...'} ${this.#options.connectionName} prefix ${this.#options.keyPrefix}`);
+        debugLogger(`Connection ${conn.destroyed ? 'destroyed' : conn.connecting ? 'connecting' : conn.isPaused() ? 'isPaused' : '...is something...'} ${this.#options.connectionName} prefix ${this.#options.keyPrefix}`);
 
         if ( conn.destroyed ) {
             await this.#options.path
@@ -191,7 +178,16 @@ export class Connect {
         this.#nextUp = index;
         this.#inUse = index - 1;
         this.#usingMap.delete(index);
-        return conn;
+        // return conn;
+    }
+
+    async* createResult ( cmd: string ) {
+        try {
+            yield* await this.#run(cmd);
+        }
+        catch ( e: any ) {
+            throw new RedisConnectError(e.message);
+        }
     }
 
     async getFinal ( cmd: string ) {
