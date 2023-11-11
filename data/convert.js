@@ -1,13 +1,13 @@
 "use strict";
 
-import {
+const {
     isMainThread,
     Worker,
-} from "worker_threads";
+} = require("worker_threads");
 
-import {
+const {
     debugLogger,
-} from "../logger.js";
+} = require("../logger");
 
 // const workerThreadMap: Map<number, Worker> = new Map();
 

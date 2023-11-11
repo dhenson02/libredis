@@ -1,22 +1,22 @@
 "use strict";
 
-import { expect } from "chai";
+const { expect } = require("chai");
 // @ts-ignore
-import * as mocha from "mocha";
+const mocha = require("mocha");
 
-import {
+const {
     debugLogger,
-} from "../logger.js";
+} = require("../logger");
 
-import {
+const {
     RedisCommandError,
-} from "./parser.js";
+} = require("./parser");
 
-import {
+const {
     REDIS_DEFAULTS,
     // RedisConnectError,
     Connect,
-} from "./connect.js";
+} = require("./connect");
 
 describe("Main connection testing", async () => {
     const redis = new Connect({

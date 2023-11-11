@@ -1,35 +1,20 @@
 "use strict";
 
-import net from "node:net";
+const net  = require("node:net");
 
-import {
+const {
     debugLogger,
-} from "../logger.js";
+}  = require("../logger");
 
-import {
+const {
     extractValue,
     // RedisCommandError,
-} from "./parser.js";
+}  = require("./parser");
 
-export interface IRedisOptions {
-    /**
-     * Keep this many connections alive and iterate between them as usage increases
-     */
-    "poolMax": 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
-    "db": number;
-    "path": string;
-    "host": string;
-    "port": number;
-    "keyPrefix": string;
-    "connectionName": string;
-    "debug": boolean;
-};
-
-export const REDIS_DEFAULTS: IRedisOptions = {
+const REDIS_DEFAULTS = {
     "poolMax": 1,
     "db": 0,
     "path": ``,
-    // "host": ``,
     "host": `127.0.0.1`,
     "port": 6379,
     "keyPrefix": ``,
@@ -37,8 +22,8 @@ export const REDIS_DEFAULTS: IRedisOptions = {
     "debug": false,
 };
 
-export function makeOptions ( redisConfig: IRedisOptions ) {
-    const options: IRedisOptions = {
+function makeOptions ( redisConfig ) {
+    const options = {
         ...redisConfig,
         "connectionName": `libredis-${process.pid}-${Date.now()}`,
     };
@@ -62,24 +47,24 @@ export function makeOptions ( redisConfig: IRedisOptions ) {
     return options;
 }
 
-export class RedisConnectError extends Error {
+class RedisConnectError extends Error {
     name = `RedisConnectError`;
 
-    constructor ( msg: string ) {
+    constructor ( msg ) {
         super(msg);
     }
 }
 
-export class Connect {
+class Connect {
     #inUse = 0;
     #nextUp = 0;
 
     #usingMap = new Map();
-    #connections: net.Socket[] = [];
+    #connections = [];
 
-    #options: IRedisOptions;
+    #options = { ...REDIS_DEFAULTS };
 
-    constructor ( options: IRedisOptions ) {
+    constructor ( options ) {
         this.#options = makeOptions({
             ...REDIS_DEFAULTS,
             ...options,
@@ -162,7 +147,7 @@ export class Connect {
                 await conn.end();
             }
         }
-        catch ( error: any ) {
+        catch ( error ) {
             throw new RedisConnectError(error.message);
             console.error(error);
         }
@@ -181,16 +166,16 @@ export class Connect {
         // return conn;
     }
 
-    async* createResult ( cmd: string ) {
+    async* createResult ( cmd ) {
         try {
             yield* await this.#run(cmd);
         }
-        catch ( e: any ) {
+        catch ( e ) {
             throw new RedisConnectError(e.message);
         }
     }
 
-    async getFinal ( cmd: string ) {
+    async getFinal ( cmd ) {
         const final = [];
         for await ( const response of this.createResult(cmd) ) {
             final.push(response);
@@ -198,7 +183,7 @@ export class Connect {
         return final;
     }
 
-    async hmset ( keySuffix: string, data: string[] ) {
+    async hmset ( keySuffix, data ) {
         const key = `${this.#options.keyPrefix}${keySuffix}`;
         const dataStr = data.join(` `);
         const cmd = `HMSET ${key} ${dataStr}\r\n`;
@@ -206,14 +191,14 @@ export class Connect {
         // yield* await this.#run(cmd);
     }
 
-    async hgetall ( keySuffix: string ) {
+    async hgetall ( keySuffix ) {
         const key = `${this.#options.keyPrefix}${keySuffix}`;
         const cmd = `HGETALL ${key}\r\n`;
         return this.getFinal(cmd);
         // yield* await this.#run(cmd);
     }
 
-    async hmget ( keySuffix: string, fields: string[] ) {
+    async hmget ( keySuffix, fields ) {
         const key = `${this.#options.keyPrefix}${keySuffix}`;
         const fieldsStr = fields.join(` `);
         const cmd = `HMGET ${key} ${fieldsStr}\r\n`;
@@ -221,3 +206,10 @@ export class Connect {
         // yield* await this.#run(cmd);
     }
 }
+
+module.exports = {
+    REDIS_DEFAULTS,
+    makeOptions,
+    RedisConnectError,
+    Connect,
+};

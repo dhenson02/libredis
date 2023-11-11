@@ -1,14 +1,14 @@
 "use strict";
 
-import * as chai from "chai";
-import "mocha";
+const chai = require("chai");
+require("mocha");
 
 const {
     // assert,
     expect,
 } = chai;
 
-import {
+const {
     getError,
     getNumber,
     getSimpleString,
@@ -23,7 +23,7 @@ import {
     EMPTY_STRING_JSON,
     EMPTY_ARRAY_JSON,
     EMPTY_OBJECT_JSON,
-} from "./parser.js";
+} = require("./parser");
 
 describe('parser defaults', () => {
     it('NULL_JSON is JSON string for null', () => {

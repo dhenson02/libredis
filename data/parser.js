@@ -1,47 +1,45 @@
 "use strict";
 
-import {
+const {
     parentPort,
     threadId,
-} from "worker_threads";
+} = require("worker_threads");
 
-import { debugLogger } from "../logger.js";
+const {
+    debugLogger,
+} = require("../logger");
 
-export class RedisCommandError extends Error {
+class RedisCommandError extends Error {
     name = `RedisCommandError`;
 
-    constructor ( msg: string|undefined ) {
+    constructor ( msg ) {
         super(msg);
     }
 }
 
-export class RedisResponseError extends Error {
+class RedisResponseError extends Error {
     name = `RedisResponseError`;
 
-    constructor ( msg: string|undefined ) {
+    constructor ( msg ) {
         super(msg);
     }
 }
-
-export type extractedValueType = (
-    string | number | RedisCommandError | null
-);
 
 /**
  * CONSTANTS FOR COMPARISONS
  */
-export const NULL_JSON = JSON.stringify(null);
-export const ZERO_JSON = JSON.stringify(0);
-export const EMPTY_STRING_JSON = JSON.stringify(``);
-export const EMPTY_ARRAY_JSON = JSON.stringify([]);
-export const EMPTY_OBJECT_JSON = JSON.stringify({});
+const NULL_JSON = JSON.stringify(null);
+const ZERO_JSON = JSON.stringify(0);
+const EMPTY_STRING_JSON = JSON.stringify(``);
+const EMPTY_ARRAY_JSON = JSON.stringify([]);
+const EMPTY_OBJECT_JSON = JSON.stringify({});
 
-const ASTERISK_CODE: number = `*`.charCodeAt(0);
-const PLUS_CODE: number = `+`.charCodeAt(0);
-const DOLLAR_CODE: number = `$`.charCodeAt(0);
-const DASH_CODE: number = `-`.charCodeAt(0);
-const COLON_CODE: number = `:`.charCodeAt(0);
-const CARR_RETURN_CODE: number = `\r`.charCodeAt(0);
+const ASTERISK_CODE = `*`.charCodeAt(0);
+const PLUS_CODE = `+`.charCodeAt(0);
+const DOLLAR_CODE = `$`.charCodeAt(0);
+const DASH_CODE = `-`.charCodeAt(0);
+const COLON_CODE = `:`.charCodeAt(0);
+const CARR_RETURN_CODE = `\r`.charCodeAt(0);
 
 /**
  * Check for carriage return (Mac new line char): "\r"
@@ -49,7 +47,7 @@ const CARR_RETURN_CODE: number = `\r`.charCodeAt(0);
  * @param {number} charCode
  * @returns {boolean}
  */
-export function isCarriageReturn ( charCode: number|undefined ): boolean {
+function isCarriageReturn ( charCode ) {
     return charCode === CARR_RETURN_CODE;
 }
 
@@ -62,7 +60,7 @@ export function isCarriageReturn ( charCode: number|undefined ): boolean {
  * @param {number} currentIndex Where our data begins inside dataBuffer
  * @returns {[string, number]} The extracted simple string and the remaining RESP string.
  */
-export function getSimpleString ( bufferData: Buffer, currentIndex: number ): [ string, number ] {
+function getSimpleString ( bufferData, currentIndex ) {
     let i = currentIndex + 1;
     while ( !isCarriageReturn(bufferData.at(i)) ) {
         i += 1;
@@ -83,7 +81,7 @@ export function getSimpleString ( bufferData: Buffer, currentIndex: number ): [ 
  * @param {number} currentIndex Where our data begins inside dataBuffer
  * @returns {[string|null, string]} The extracted bulk string or null and the remaining RESP string.
  */
-export function getBulkString ( bufferData: Buffer, currentIndex: number ): [ extractedValueType, number ] {
+function getBulkString ( bufferData, currentIndex ) {
     let i = currentIndex + 1;
 
     // $-1 is null value inside array
@@ -119,7 +117,7 @@ export function getBulkString ( bufferData: Buffer, currentIndex: number ): [ ex
  * @param {number} currentIndex Where our data begins inside dataBuffer
  * @returns {[number, number]} The extracted number and the remaining RESP string.
  */
-export function getNumber ( bufferData: Buffer, currentIndex: number ): [ extractedValueType, number ] {
+function getNumber ( bufferData, currentIndex ) {
     let i = currentIndex + 1;
     let current = bufferData.at(i);
     do {
@@ -143,7 +141,7 @@ export function getNumber ( bufferData: Buffer, currentIndex: number ): [ extrac
  * @param {number} currentIndex Where our data begins inside dataBuffer
  * @returns {[RedisCommandError, number]} The extracted error and the remaining RESP string.
  */
-export function getError ( bufferData: Buffer, currentIndex: number ): [ extractedValueType, number ] {
+function getError ( bufferData, currentIndex ) {
     let i = currentIndex + 1;
     while ( !isCarriageReturn(bufferData.at(i)) ) {
         i += 1;
@@ -164,7 +162,7 @@ export function getError ( bufferData: Buffer, currentIndex: number ): [ extract
  * @param {number} currentIndex Where our data begins inside dataBuffer
  * @returns {[extractedValueType[], number]} The extracted array and the remaining RESP string.
  */
-export function extractArray ( bufferData: Buffer, currentIndex: number ): [ extractedValueType[], number ] {
+function extractArray ( bufferData, currentIndex ) {
     let i = currentIndex + 1;
     let current = bufferData.at(i);
 
@@ -212,7 +210,7 @@ export function extractArray ( bufferData: Buffer, currentIndex: number ): [ ext
  *     - number
  *     - RedisCommandError
  */
-export function extractValue ( bufferData: Buffer, currentIndex: number ): [ extractedValueType | extractedValueType[], number ] {
+function extractValue ( bufferData, currentIndex ) {
     /**
      * start at beginning of next chunk
      */
@@ -253,7 +251,7 @@ export function extractValue ( bufferData: Buffer, currentIndex: number ): [ ext
  * @param {string} string The JSON string to parse.
  * @returns {*} The parsed JavaScript object if the string is valid JSON, otherwise null.
  */
-export function parseFromJSON ( string: string ) {
+function parseFromJSON ( string ) {
     if ( typeof string !== `string` ) {
         return null;
     }
@@ -280,7 +278,7 @@ export function parseFromJSON ( string: string ) {
  *     - Other: Passes to JSON.stringify() and returns result.
  * @returns {string} JSON string representation of data.
  */
-export function stringifyToJSON ( data: null|number|[]|{} ): string {
+function stringifyToJSON ( data ) {
     if ( ( data ?? null ) === null ) {
         return NULL_JSON;
     }
@@ -304,3 +302,22 @@ export function stringifyToJSON ( data: null|number|[]|{} ): string {
 parentPort?.on(`message-${threadId}`, function subscriptionHandler ( data ) {
 
 });
+
+module.exports = {
+    RedisCommandError,
+    RedisResponseError,
+    NULL_JSON,
+    ZERO_JSON,
+    EMPTY_STRING_JSON,
+    EMPTY_ARRAY_JSON,
+    EMPTY_OBJECT_JSON,
+    isCarriageReturn,
+    getSimpleString,
+    getBulkString,
+    getNumber,
+    getError,
+    extractArray,
+    extractValue,
+    parseFromJSON,
+    stringifyToJSON,
+};
