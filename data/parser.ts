@@ -5,8 +5,16 @@ import {
     threadId,
 } from "worker_threads";
 
+export class RedisCommandError extends Error {
+    name = `RedisCommandError`;
+
+    constructor ( msg ) {
+        super(msg);
+    }
+}
+
 export type extractedValueType = (
-    string | number | Error | null
+    string | number | RedisCommandError | null
 );
 
 /**
@@ -127,7 +135,7 @@ export function getNumber ( bufferData: Buffer, currentIndex: number ): [ extrac
  *
  * @param {Buffer} bufferData The RESP string to extract an error from.
  * @param {number} currentIndex Where our data begins inside dataBuffer
- * @returns {[Error, number]} The extracted error and the remaining RESP string.
+ * @returns {[RedisCommandError, number]} The extracted error and the remaining RESP string.
  */
 export function getError ( bufferData: Buffer, currentIndex: number ): [ extractedValueType, number ] {
     let i = currentIndex + 1;
@@ -136,7 +144,7 @@ export function getError ( bufferData: Buffer, currentIndex: number ): [ extract
     }
 
     return [
-        new Error(bufferData.toString(`utf8`, currentIndex + 1, i)),
+        new RedisCommandError(bufferData.toString(`utf8`, currentIndex + 1, i)),
         i + 2,
     ];
 }
@@ -196,7 +204,7 @@ export function extractArray ( bufferData: Buffer, currentIndex: number ): [ ext
  *     - Array<extractedValueType>
  *     - string
  *     - number
- *     - Error
+ *     - RedisCommandError
  */
 export function extractValue ( bufferData: Buffer, currentIndex: number ): [ extractedValueType | extractedValueType[], number ] {
     /**

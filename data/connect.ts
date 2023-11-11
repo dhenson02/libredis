@@ -2,6 +2,10 @@
 
 import net from "node:net";
 
+// import {
+//     debugLogger,
+// } from "../logger.js";
+
 import {
     extractValue,
 } from "./parser.js";
@@ -10,9 +14,8 @@ export interface IRedisOptions {
     /**
      * Keep this many connections alive and iterate between them as usage increases
      */
-    "poolMax": 1|2|3|4|5|6|7|8;
+    "poolMax": 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
     "db": number;
-    "prefix": string;
     "path": string;
     "host": string;
     "port": number;
@@ -24,7 +27,6 @@ export interface IRedisOptions {
 export const REDIS_DEFAULTS: IRedisOptions = {
     "poolMax": 1,
     "db": 0,
-    "prefix": ``,
     "path": ``,
     // "host": ``,
     "host": `127.0.0.1`,
@@ -34,9 +36,8 @@ export const REDIS_DEFAULTS: IRedisOptions = {
     "debug": false,
 };
 
-export function makeOptions ( redisConfig ) {
+export function makeOptions ( redisConfig: IRedisOptions ) {
     const options: IRedisOptions = {
-        ...REDIS_DEFAULTS,
         ...redisConfig,
         "connectionName": `libredis-${process.pid}-${Date.now()}`,
     };
@@ -60,41 +61,85 @@ export function makeOptions ( redisConfig ) {
     return options;
 }
 
-export function connect ( config ) {
-    const options = makeOptions(config);
+export class RedisConnectError extends Error {
+    name = `RedisConnectError`;
 
-    const connections = Array.from(
-        { "length": options.poolMax },
-        () => {
-            let conn = options.path
-                ? net.createConnection(options.path)
-                : net.createConnection(options.port, options.host);
-            // conn.allowHalfOpen = true;
-            conn.write(`CLIENT SETNAME ${options.connectionName}\r\n`);
-            return conn;
+    constructor ( msg ) {
+        super(msg);
+    }
+}
+
+export class Connect {
+    #inUse = 0;
+    #nextUp = 0;
+
+    #usingMap = new Map();
+    #connections = [];
+
+    #options: IRedisOptions;
+
+    #debugLogger ( ...msg ) {
+        if ( this.#options.debug ) return console.log(...msg);
+    }
+
+    async* createResult ( cmd ) {
+        try {
+            yield* await this.#run(cmd);
         }
-    );
+        catch (e) {
+            throw new RedisConnectError(e.message);
+        }
+    }
 
-    const usingMap = new Map();
-    let inUse = 0;
-    let nextUp = 0;
-    return async function* run ( prefix = `app` ) {
-        const index = nextUp % connections.length;
+    constructor ( options ) {
+        this.#options = makeOptions({
+            ...REDIS_DEFAULTS,
+            ...options,
+        });
 
-        if ( usingMap.has(index) ) {
+        this.#connections = Array.from(
+            { "length": this.#options.poolMax },
+            () => {
+                const conn = this.#options.path
+                    ? net.createConnection(this.#options.path)
+                    : net.createConnection(this.#options.port, this.#options.host);
+                // conn.allowHalfOpen = true;
+                conn.write(`CLIENT SETNAME ${this.#options.connectionName}\r\n`);
+                return conn;
+            }
+        );
+
+        // const client = connect(this.#options);
+    }
+
+    async drop () {
+        let count = 0;
+        for ( const conn of this.#connections ) {
+            await conn.destroy();
+            count += 1;
+        }
+        return count;
+    }
+
+    async* #run ( command = `` ) {
+        const index = this.#nextUp % this.#connections.length;
+
+        if ( this.#usingMap.has(index) ) {
             const recursive = new Promise(resolve => {
                 setTimeout(() => {
-                    resolve(run(prefix));
-                }, 10) // @TODO - exponential backoff maybe
+                    resolve(this.#run(command));
+                    // @TODO - exponential backoff maybe (to a certain ceiling)
+                    // @TODO - possibly just use fastq for this
+                }, 10)
             });
             return await recursive;
         }
 
-        usingMap.set(index, true);
-        const conn = await connections[ index ];
+        this.#usingMap.set(index, true);
+        const conn = await this.#connections[ index ];
 
-        inUse = index;
-        nextUp = inUse + 1;
+        this.#inUse = index;
+        this.#nextUp = this.#inUse + 1;
 
         try {
 
@@ -103,18 +148,11 @@ export function connect ( config ) {
             }
             await conn.cork();
 
-            conn.write(`HMSET ${prefix}:map a 1 b 2 c 3 d 4\r\n`);
-            conn.write(`EXISTS ${prefix}:map\r\n`);
-            conn.write(`HKEYS ${prefix}:map\r\n`);
-            conn.write(`HMGET ${prefix}:map a b c d\r\n`);
-            conn.write(`HGETALL ${prefix}:map\r\n`);
-            conn.write(`HGETALL ${prefix}:map\r\n`);
-            conn.write(`INFO keys\r\n`);
+            // Run send full command to Redis
+            conn.write(command);
 
-            if ( options.debug === true ) {
-                console.log(`Connection ${options.connectionName} prefix ${prefix}`);
-                console.log(conn.isPaused(), conn.destroyed, conn.connecting, conn.readable, conn.writable);
-            }
+            this.#debugLogger(`Connection ${this.#options.connectionName} prefix ${this.#options.keyPrefix}`);
+            this.#debugLogger(conn.isPaused(), conn.destroyed, conn.connecting, conn.readable, conn.writable);
 
             await conn.uncork();
 
@@ -137,22 +175,56 @@ export function connect ( config ) {
             }
         }
         catch ( error ) {
+            throw new RedisConnectError(error.message);
             console.error(error);
         }
 
-        if ( options.debug === true ) {
-            console.log(`Connection ${conn.destroyed ? 'destroyed' : conn.connecting ? 'connecting' : conn.isPaused() ? 'isPaused' : '...is something...'} ${options.connectionName} prefix ${prefix}`);
-        }
+        this.#debugLogger(`Connection ${conn.destroyed ? 'destroyed' : conn.connecting ? 'connecting' : conn.isPaused() ? 'isPaused' : '...is something...'} ${this.#options.connectionName} prefix ${this.#options.keyPrefix}`);
 
         if ( conn.destroyed ) {
-            await options.path
-                ? conn.connect(options.path)
-                : conn.connect(options.port, options.host);
+            await this.#options.path
+                ? conn.connect(this.#options.path)
+                : conn.connect(this.#options.port, this.#options.host);
         }
 
-        nextUp = index;
-        inUse = index - 1;
-        usingMap.delete(index);
+        this.#nextUp = index;
+        this.#inUse = index - 1;
+        this.#usingMap.delete(index);
         return conn;
+    }
+
+    async hmset ( keySuffix: string, data: string[] ) {
+        const key = `${this.#options.keyPrefix}${keySuffix}`;
+        const dataStr = data.join(` `);
+        const cmd = `HMSET ${key} ${dataStr}\r\n`;
+        const final = [];
+        for await ( const response of this.createResult(cmd) ) {
+            final.push(response);
+        }
+        return final;
+        // yield* await this.#run(cmd);
+    }
+
+    async hgetall ( keySuffix: string ) {
+        const key = `${this.#options.keyPrefix}${keySuffix}`;
+        const cmd = `HGETALL ${key}\r\n`;
+        const final = [];
+        for await ( const response of this.createResult(cmd) ) {
+            final.push(response);
+        }
+        return final;
+        // yield* await this.#run(cmd);
+    }
+
+    async hmget ( keySuffix: string, fields: string[] ) {
+        const key = `${this.#options.keyPrefix}${keySuffix}`;
+        const fieldsStr = fields.join(` `);
+        const cmd = `HMGET ${key} ${fieldsStr}\r\n`;
+        const final = [];
+        for await ( const response of this.createResult(cmd) ) {
+            final.push(response);
+        }
+        return final;
+        // yield* await this.#run(cmd);
     }
 }
