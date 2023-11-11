@@ -26,10 +26,6 @@ export const EMPTY_STRING_JSON = JSON.stringify(``);
 export const EMPTY_ARRAY_JSON = JSON.stringify([]);
 export const EMPTY_OBJECT_JSON = JSON.stringify({});
 
-export const OBJECT = `object`;
-export const STRING = `string`;
-export const NUMBER = `number`;
-
 const ASTERISK_CODE: number = `*`.charCodeAt(0);
 const PLUS_CODE: number = `+`.charCodeAt(0);
 const DOLLAR_CODE: number = `$`.charCodeAt(0);
@@ -248,7 +244,7 @@ export function extractValue ( bufferData: Buffer, currentIndex: number ): [ ext
  * @returns {*} The parsed JavaScript object if the string is valid JSON, otherwise null.
  */
 export function parseFromJSON ( string: string ) {
-    if ( typeof string !== STRING ) {
+    if ( typeof string !== `string` ) {
         return null;
     }
 

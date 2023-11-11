@@ -9,7 +9,8 @@
         "app": "node build/index.js",
         "tsc": "tsc",
         "tsc-dev": "tsc --watch",
-        "test": "export NODE_ENV=development && mocha --exclude **/*/node_modules ./build/**/*.test.js",
+        "test": "mocha --exclude **/*/node_modules ./build/**/*.test.js",
+        "test:dev": "export NODE_ENV=development && npm test",
         "lint:test": "eslint -c .eslintrc.js '**/*.{js,ts,json}'",
         "lint:fix": "eslint -c .eslintrc.js --fix '**/*.{js,ts,json}'"
     },
