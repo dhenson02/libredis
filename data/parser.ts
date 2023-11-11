@@ -8,7 +8,7 @@ import {
 export class RedisCommandError extends Error {
     name = `RedisCommandError`;
 
-    constructor ( msg ) {
+    constructor ( msg: string|undefined ) {
         super(msg);
     }
 }
@@ -43,7 +43,7 @@ const CARR_RETURN_CODE: number = `\r`.charCodeAt(0);
  * @param {number} charCode
  * @returns {boolean}
  */
-export function isCarriageReturn ( charCode: number ): boolean {
+export function isCarriageReturn ( charCode: number|undefined ): boolean {
     return charCode === CARR_RETURN_CODE;
 }
 
@@ -274,11 +274,12 @@ export function parseFromJSON ( string: string ) {
  *     - Other: Passes to JSON.stringify() and returns result.
  * @returns {string} JSON string representation of data.
  */
-export function stringifyToJSON ( data ) {
-    if (
-        ( data ?? null ) === null ||
-        ( typeof data === NUMBER && isNaN(data) )
-    ) {
+export function stringifyToJSON ( data: null|number|[]|{} ): string {
+    if ( ( data ?? null ) === null ) {
+        return NULL_JSON;
+    }
+
+    if ( typeof data === `number` && isNaN(data) ) {
         return NULL_JSON;
     }
 

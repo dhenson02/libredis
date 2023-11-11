@@ -8,6 +8,7 @@ import net from "node:net";
 
 import {
     extractValue,
+    // RedisCommandError,
 } from "./parser.js";
 
 export interface IRedisOptions {
@@ -64,7 +65,7 @@ export function makeOptions ( redisConfig: IRedisOptions ) {
 export class RedisConnectError extends Error {
     name = `RedisConnectError`;
 
-    constructor ( msg ) {
+    constructor ( msg: string ) {
         super(msg);
     }
 }
@@ -74,24 +75,24 @@ export class Connect {
     #nextUp = 0;
 
     #usingMap = new Map();
-    #connections = [];
+    #connections: net.Socket[] = [];
 
     #options: IRedisOptions;
 
-    #debugLogger ( ...msg ) {
+    debugLogger ( ...msg: any ) {
         if ( this.#options.debug ) return console.log(...msg);
     }
 
-    async* createResult ( cmd ) {
+    async* createResult ( cmd: string ) {
         try {
             yield* await this.#run(cmd);
         }
-        catch (e) {
+        catch (e: any) {
             throw new RedisConnectError(e.message);
         }
     }
 
-    constructor ( options ) {
+    constructor ( options: IRedisOptions ) {
         this.#options = makeOptions({
             ...REDIS_DEFAULTS,
             ...options,
@@ -151,8 +152,8 @@ export class Connect {
             // Run send full command to Redis
             conn.write(command);
 
-            this.#debugLogger(`Connection ${this.#options.connectionName} prefix ${this.#options.keyPrefix}`);
-            this.#debugLogger(conn.isPaused(), conn.destroyed, conn.connecting, conn.readable, conn.writable);
+            this.debugLogger(`Connection ${this.#options.connectionName} prefix ${this.#options.keyPrefix}`);
+            this.debugLogger(conn.isPaused(), conn.destroyed, conn.connecting, conn.readable, conn.writable);
 
             await conn.uncork();
 
@@ -174,12 +175,12 @@ export class Connect {
                 await conn.end();
             }
         }
-        catch ( error ) {
+        catch ( error: any ) {
             throw new RedisConnectError(error.message);
             console.error(error);
         }
 
-        this.#debugLogger(`Connection ${conn.destroyed ? 'destroyed' : conn.connecting ? 'connecting' : conn.isPaused() ? 'isPaused' : '...is something...'} ${this.#options.connectionName} prefix ${this.#options.keyPrefix}`);
+        this.debugLogger(`Connection ${conn.destroyed ? 'destroyed' : conn.connecting ? 'connecting' : conn.isPaused() ? 'isPaused' : '...is something...'} ${this.#options.connectionName} prefix ${this.#options.keyPrefix}`);
 
         if ( conn.destroyed ) {
             await this.#options.path
@@ -193,26 +194,26 @@ export class Connect {
         return conn;
     }
 
-    async hmset ( keySuffix: string, data: string[] ) {
-        const key = `${this.#options.keyPrefix}${keySuffix}`;
-        const dataStr = data.join(` `);
-        const cmd = `HMSET ${key} ${dataStr}\r\n`;
+    async getFinal ( cmd: string ) {
         const final = [];
         for await ( const response of this.createResult(cmd) ) {
             final.push(response);
         }
         return final;
+    }
+
+    async hmset ( keySuffix: string, data: string[] ) {
+        const key = `${this.#options.keyPrefix}${keySuffix}`;
+        const dataStr = data.join(` `);
+        const cmd = `HMSET ${key} ${dataStr}\r\n`;
+        return this.getFinal(cmd);
         // yield* await this.#run(cmd);
     }
 
     async hgetall ( keySuffix: string ) {
         const key = `${this.#options.keyPrefix}${keySuffix}`;
         const cmd = `HGETALL ${key}\r\n`;
-        const final = [];
-        for await ( const response of this.createResult(cmd) ) {
-            final.push(response);
-        }
-        return final;
+        return this.getFinal(cmd);
         // yield* await this.#run(cmd);
     }
 
@@ -220,11 +221,7 @@ export class Connect {
         const key = `${this.#options.keyPrefix}${keySuffix}`;
         const fieldsStr = fields.join(` `);
         const cmd = `HMGET ${key} ${fieldsStr}\r\n`;
-        const final = [];
-        for await ( const response of this.createResult(cmd) ) {
-            final.push(response);
-        }
-        return final;
+        return this.getFinal(cmd);
         // yield* await this.#run(cmd);
     }
 }

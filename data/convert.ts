@@ -42,7 +42,7 @@ function reForkThread () {
 if ( isMainThread ) {
     reForkThread();
 }
-else {
+// else {
 
     /**
      * @TODO LIST
@@ -53,4 +53,4 @@ else {
      */
 
 
-}
+// }
