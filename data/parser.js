@@ -299,9 +299,9 @@ function stringifyToJSON ( data ) {
 // }
 
 
-parentPort?.on(`message-${threadId}`, function subscriptionHandler ( data ) {
-
-});
+// parentPort?.on(`message-${threadId}`, function subscriptionHandler ( data ) {
+//
+// });
 
 module.exports = {
     RedisCommandError,

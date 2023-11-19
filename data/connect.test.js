@@ -55,27 +55,28 @@ describe("Main connection testing", async () => {
             `d`,
         ]);
         debugLogger(response);
-        const [ status, ] = response;
-        expect(status).to.be.instanceOf(RedisCommandError);
+        const [ status, data ] = response;
+        expect(status).to.equal(`OK`);
+        expect(data).to.be.instanceOf(RedisCommandError);
         // expect(status.message).to.equal(`ERR wrong number of arguments for 'hmset' command`);
     });
 
     it("gets hashmap full data dump", async () => {
         const flattenedValues = await redis.hgetall(`def1`);
         debugLogger(flattenedValues);
-        expect(flattenedValues)
-            .to
-            .deep
-            .equal([[
-                `a`,
-                `1`,
-                `b`,
-                `2`,
-                `c`,
-                `3`,
-                `d`,
-                `4`,
-            ]]);
+        expect(flattenedValues).to.be.instanceOf(Array);
+        const [status, data] = flattenedValues;
+        expect(status).to.equal(`OK`);
+        expect(data).to.deep.equal([
+            `a`,
+            `1`,
+            `b`,
+            `2`,
+            `c`,
+            `3`,
+            `d`,
+            `4`,
+        ]);
     });
 
     it("gets individual field values from hashmap data", async () => {
@@ -85,31 +86,30 @@ describe("Main connection testing", async () => {
             `c`,
             `d`,
         ]);
-        expect(values)
-            .to
-            .deep
-            .equal([
-                // `OK`,
-                [
-                    `1`,
-                    `2`,
-                    `3`,
-                    `4`,
-                ]
-            ]);
+        expect(values).to.be.instanceOf(Array);
+        const [status, data] = values;
+        expect(status).to.equal(`OK`);
+        expect(data).to.deep.equal([
+            `1`,
+            `2`,
+            `3`,
+            `4`,
+        ]);
         debugLogger(values);
     });
 
     it("gets error when missing individual field names for hashmap data", async () => {
         const values = await redis.hmget(`def1`, []);
         debugLogger(values);
-        const [ status, ] = values;
-        expect(status).to.be.instanceOf(RedisCommandError);
+        expect(values).to.be.instanceOf(Array);
+        const [status, data] = values;
+        expect(status).to.equal(`OK`);
+        expect(data).to.be.instanceOf(RedisCommandError);
         // expect(status.message).to.equal(`ERR wrong number of arguments for 'hmget' command`);
     });
 
     // it("destroys the server with 1000 hits", async () => {
-    setTimeout(async () => {
+    /*setTimeout(async () => {
         const redis = new Connect({
             "keyPrefix": `test:a:`,
             "poolMax": 6,
@@ -134,7 +134,7 @@ describe("Main connection testing", async () => {
             ]);
         }
 
-    }, 800);
+    }, 800);*/
     // });
 
     setTimeout(async () => {
@@ -145,7 +145,7 @@ describe("Main connection testing", async () => {
 
         const current = await redis.hgetall(`def2`);
         debugLogger(current);
-    }, 1000);
+    }, 200);
 
     it("drops these stupid connections", async () => {
         const total = await redis.drop();
