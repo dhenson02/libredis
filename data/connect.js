@@ -132,7 +132,7 @@ class Connect {
                 this.#bufferTime *= 2;
             }
             await sleep(this.#bufferTime);
-            return this.#run(command);
+            return await this.#run(command);
         }
 
         this.#bufferTime = 1;
@@ -148,7 +148,7 @@ class Connect {
             // Run send full command to Redis
             conn.write(command);
 
-            debugLogger(connectionName, command);
+            // debugLogger(connectionName, command);
 
             conn.uncork();
 
