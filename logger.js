@@ -9,4 +9,4 @@ const debugLogger = isDev
 module.exports = {
     isDev,
     debugLogger,
-}
+};

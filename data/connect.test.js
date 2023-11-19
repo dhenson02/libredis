@@ -108,6 +108,35 @@ describe("Main connection testing", async () => {
         // expect(status.message).to.equal(`ERR wrong number of arguments for 'hmget' command`);
     });
 
+    // it("destroys the server with 1000 hits", async () => {
+    setTimeout(async () => {
+        const redis = new Connect({
+            "keyPrefix": `test:a:`,
+            "poolMax": 6,
+        });
+
+        for ( let i = 0; i < 1000; i++ ) {
+            redis.hmset(`def${i}`, [
+                `a`,
+                `1`,
+                `b`,
+                `2`,
+                `c`,
+                `3`,
+                `d`,
+                `4`,
+            ]);
+            redis.hmget(`def${i}`, [
+                `a`,
+                `b`,
+                `c`,
+                `d`,
+            ]);
+        }
+
+    }, 800);
+    // });
+
     setTimeout(async () => {
         const redis = new Connect({
             ...REDIS_DEFAULTS,

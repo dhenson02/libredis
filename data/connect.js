@@ -1,6 +1,17 @@
 "use strict";
 
+const sleep = ( timer ) =>
+    new Promise(( res ) => {
+        setTimeout(() => res(), timer);
+    });
+
 const net  = require("node:net");
+const stream = require("node:stream");
+const util = require("node:util");
+const events = require("node:events");
+
+const finished = util.promisify(stream.finished);
+const { once } = events;
 
 const {
     debugLogger,
@@ -25,7 +36,7 @@ const REDIS_DEFAULTS = {
 function makeOptions ( redisConfig ) {
     const options = {
         ...redisConfig,
-        "connectionName": `libredis-${process.pid}-${Date.now()}`,
+        "connectionName": `libredis-${process.pid}`,
     };
 
     if ( !redisConfig ) {
@@ -56,13 +67,13 @@ class RedisConnectError extends Error {
 }
 
 class Connect {
-    #inUse = 0;
     #nextUp = 0;
 
     #usingMap = new Map();
-    #connections = [];
+    #connections = null;
 
     #options = { ...REDIS_DEFAULTS };
+    #connOpts = {};
 
     constructor ( options ) {
         this.#options = makeOptions({
@@ -70,98 +81,107 @@ class Connect {
             ...options,
         });
 
-        this.#connections = Array.from(
-            { "length": this.#options.poolMax },
-            () => {
-                const conn = this.#options.path
-                    ? net.createConnection(this.#options.path)
-                    : net.createConnection(this.#options.port, this.#options.host);
-                // conn.allowHalfOpen = true;
-                conn.write(`CLIENT SETNAME ${this.#options.connectionName}\r\n`);
-                return conn;
-            }
-        );
+        this.#connOpts = {
+            ...(
+                this.#options.path
+                    ? { "path": this.#options.path }
+                    : { "port": this.#options.port, "host": this.#options.host }
+            ),
+            // "keepAlive": true,
+            "noDelay": true,
+            // ""
+        };
 
-        // const client = connect(this.#options);
+        this.#connections = new Map(Array.from(
+            { "length": this.#options.poolMax },
+            (_, i) => {
+                const conn = net.createConnection(this.#connOpts);
+                const connectionName = this.#options.connectionName + `-${i}`;
+                // conn.allowHalfOpen = true;
+                conn.write(`CLIENT SETNAME ${connectionName}\r\n`);
+                return [
+                    connectionName,
+                    conn,
+                ];
+            })
+        );
     }
 
     async drop () {
         let count = 0;
-        for ( const conn of this.#connections ) {
+        for ( const [name, conn] of this.#connections.entries() ) {
             await conn.destroy();
+            this.#connections.delete(name);
             count += 1;
         }
         return count;
     }
 
+    #bufferTime = 1;
+
     async* #run ( command = `` ) {
-        const index = this.#nextUp % this.#connections.length;
+        const index = this.#nextUp % this.#connections.size;
+
+        this.#nextUp = index + 1;
+        // this.#nextUp = index === this.#options.poolMax - 1
+        //     ? 0
+        //     : index + 1;
 
         if ( this.#usingMap.has(index) ) {
-            const recursive = new Promise(resolve => {
-                setTimeout(() => {
-                    resolve(this.#run(command));
-                    // @TODO - exponential backoff maybe (to a certain ceiling)
-                    // @TODO - possibly just use fastq for this
-                }, 10)
-            });
-            return await recursive;
+            if ( this.#bufferTime < 512 ) {
+                this.#bufferTime *= 2;
+            }
+            await sleep(this.#bufferTime);
+            return this.#run(command);
         }
 
+        this.#bufferTime = 1;
         this.#usingMap.set(index, true);
-        const conn = await this.#connections[ index ];
-
-        this.#inUse = index;
-        this.#nextUp = this.#inUse + 1;
+        const connectionName = this.#options.connectionName + `-${index}`;
+        const conn = this.#connections.get(connectionName);
+        // await once(conn, 'connect');
 
         try {
 
-            if ( conn.isPaused() ) {
-                await conn.resume();
-            }
-            await conn.cork();
+            conn.cork();
 
             // Run send full command to Redis
             conn.write(command);
 
-            debugLogger(`Connection ${this.#options.connectionName} prefix ${this.#options.keyPrefix}`);
-            debugLogger(conn.isPaused(), conn.destroyed, conn.connecting, conn.readable, conn.writable);
+            debugLogger(connectionName, command);
 
-            await conn.uncork();
+            conn.uncork();
+
+            if ( conn.isPaused() ) {
+                conn.resume();
+            }
 
             for await ( const data of conn ) {
                 let result;
-                // let next = data;
                 let dataSize = data.length;
                 let nextIndex = 0;
                 do {
+                    // await sleep(100);
                     [ result, nextIndex ] = extractValue(data, nextIndex);
                     yield result;
                 }
                 while ( nextIndex < dataSize );
 
-                // neither of these appears to be closing the connection
-                // so use the one without error (.end) for now
-
-                // await conn.destroy();
-                await conn.end();
+                conn.end();
+                // await finished(conn);
             }
         }
         catch ( error ) {
+            debugLogger(error.stack);
             throw new RedisConnectError(error.message);
-            console.error(error);
         }
-
-        debugLogger(`Connection ${conn.destroyed ? 'destroyed' : conn.connecting ? 'connecting' : conn.isPaused() ? 'isPaused' : '...is something...'} ${this.#options.connectionName} prefix ${this.#options.keyPrefix}`);
 
         if ( conn.destroyed ) {
-            await this.#options.path
-                ? conn.connect(this.#options.path)
-                : conn.connect(this.#options.port, this.#options.host);
+            conn.connect(this.#connOpts);
+            await once(conn, `connect`);
         }
 
-        this.#nextUp = index;
-        this.#inUse = index - 1;
+        // this.#nextUp = this.#nextUp - 1;
         this.#usingMap.delete(index);
         // return conn;
     }
@@ -171,6 +191,7 @@ class Connect {
             yield* await this.#run(cmd);
         }
         catch ( e ) {
+            debugLogger(e.stack);
             throw new RedisConnectError(e.message);
         }
     }
@@ -188,14 +209,12 @@ class Connect {
         const dataStr = data.join(` `);
         const cmd = `HMSET ${key} ${dataStr}\r\n`;
         return this.getFinal(cmd);
-        // yield* await this.#run(cmd);
     }
 
     async hgetall ( keySuffix ) {
         const key = `${this.#options.keyPrefix}${keySuffix}`;
         const cmd = `HGETALL ${key}\r\n`;
         return this.getFinal(cmd);
-        // yield* await this.#run(cmd);
     }
 
     async hmget ( keySuffix, fields ) {
@@ -203,7 +222,6 @@ class Connect {
         const fieldsStr = fields.join(` `);
         const cmd = `HMGET ${key} ${fieldsStr}\r\n`;
         return this.getFinal(cmd);
-        // yield* await this.#run(cmd);
     }
 }
 
