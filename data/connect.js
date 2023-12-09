@@ -95,6 +95,15 @@ class Connect {
         for ( let i = 0; i < this.#options.poolMax; i++ ) {
             const connectionName = this.#options.connectionName + `-${i}`;
             const conn = net.createConnection(this.#connOpts);
+            // conn.allowHalfOpen = true;
+            debugLogger({
+                readable: conn.readable,
+                readableDidRead: conn.readableDidRead,
+                readableEnded: conn.readableEnded,
+                writable: conn.writable,
+                writableFinished: conn.writableFinished,
+                writableEnded: conn.writableEnded,
+            });
             this.#connections.set(connectionName, conn);
         }
     }
@@ -118,7 +127,7 @@ class Connect {
         const connectionName = this.#options.connectionName + `-${index}`;
         const conn = this.#connections.get(connectionName);
 
-        conn.setKeepAlive(true);
+        // conn.setKeepAlive(true);
 
         // Run/send full command to Redis
         conn.cork();
@@ -139,15 +148,27 @@ class Connect {
                 yield result;
             }
             while ( nextIndex < dataSize );
-
+            // debugLogger({
+            //     eventNames: conn.eventNames(),
+            //     getMaxListeners: conn.getMaxListeners(),
+            //     readable: conn.readable,
+            //     readableDidRead: conn.readableDidRead,
+            //     readableEnded: conn.readableEnded,
+            //     writable: conn.writable,
+            //     writableFinished: conn.writableFinished,
+            //     writableEnded: conn.writableEnded,
+            // });
             conn.end();
             // await finished(conn);
         }
-
         if ( conn.destroyed ) {
             try {
-                conn.connect(this.#connOpts);
-                await once(conn, `connect`);
+                conn.write(`QUIT\r\n`);
+                conn.unref();
+                const nextConn = net.createConnection(this.#connOpts);
+                this.#connections.set(connectionName, nextConn);
+                // conn.connect(this.#connOpts);
+                await once(nextConn, `connect`);
             }
             catch ( e ) {
                 debugLogger(e.stack);
@@ -156,7 +177,6 @@ class Connect {
         }
 
         delete this.#usingMap[index];
-        return conn; // no point
     }
 
     // async* createResult ( cmd ) {

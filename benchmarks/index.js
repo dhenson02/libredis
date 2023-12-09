@@ -4,7 +4,7 @@ const { Connect, } = require("libredis");
 
 const redis = new Connect({
     "keyPrefix": `test:aa:`,
-    "poolMax": 1,
+    "poolMax": 6,
 });
 
 setTimeout(async () => {
