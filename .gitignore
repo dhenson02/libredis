@@ -3,3 +3,5 @@ node_modules
 .idea
 .env
 .vscode
+
+benchmarks/node_modules

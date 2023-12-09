@@ -5,6 +5,7 @@ const sleep = ( timer ) =>
         setTimeout(() => res(), timer);
     });
 
+const assert = require("node:assert");
 const net  = require("node:net");
 const stream = require("node:stream");
 const util = require("node:util");
@@ -69,8 +70,8 @@ class RedisConnectError extends Error {
 class Connect {
     #nextUp = 0;
 
-    #usingMap = new Map();
-    #connections = null;
+    #usingMap = {};
+    #connections = new Map();
 
     #options = { ...REDIS_DEFAULTS };
     #connOpts = {};
@@ -88,28 +89,20 @@ class Connect {
                     : { "port": this.#options.port, "host": this.#options.host }
             ),
             // "keepAlive": true,
-            "noDelay": true,
-            // ""
+            // "noDelay": true,
         };
 
-        this.#connections = new Map(Array.from(
-            { "length": this.#options.poolMax },
-            (_, i) => {
-                const conn = net.createConnection(this.#connOpts);
-                const connectionName = this.#options.connectionName + `-${i}`;
-                // conn.allowHalfOpen = true;
-                conn.write(`CLIENT SETNAME ${connectionName}\r\n`);
-                return [
-                    connectionName,
-                    conn,
-                ];
-            })
-        );
+        for ( let i = 0; i < this.#options.poolMax; i++ ) {
+            const connectionName = this.#options.connectionName + `-${i}`;
+            const conn = net.createConnection(this.#connOpts);
+            this.#connections.set(connectionName, conn);
+        }
     }
 
     async drop () {
         let count = 0;
-        for ( const [name, conn] of this.#connections.entries() ) {
+        for ( const [name, conn] of this.#connections ) {
+            conn.write(`QUIT\r\n`);
             await conn.destroy();
             this.#connections.delete(name);
             count += 1;
@@ -117,88 +110,76 @@ class Connect {
         return count;
     }
 
-    #bufferTime = 1;
-
     async* #run ( command = `` ) {
         const index = this.#nextUp % this.#connections.size;
 
         this.#nextUp = index + 1;
-        // this.#nextUp = index === this.#options.poolMax - 1
-        //     ? 0
-        //     : index + 1;
-
-        if ( this.#usingMap.has(index) ) {
-            if ( this.#bufferTime < 512 ) {
-                this.#bufferTime *= 2;
-            }
-            await sleep(this.#bufferTime);
-            return await this.#run(command);
-        }
-
-        this.#bufferTime = 1;
-        this.#usingMap.set(index, true);
+        this.#usingMap[ index ] = true;
         const connectionName = this.#options.connectionName + `-${index}`;
         const conn = this.#connections.get(connectionName);
-        // await once(conn, 'connect');
 
-        try {
+        conn.setKeepAlive(true);
 
-            conn.cork();
+        // Run/send full command to Redis
+        conn.cork();
+        conn.write(command);
+        conn.uncork();
 
-            // Run send full command to Redis
-            conn.write(command);
-
-            // debugLogger(connectionName, command);
-
-            conn.uncork();
-
-            if ( conn.isPaused() ) {
-                conn.resume();
-            }
-
-            for await ( const data of conn ) {
-                let result;
-                let dataSize = data.length;
-                let nextIndex = 0;
-                do {
-                    // await sleep(100);
-                    [ result, nextIndex ] = extractValue(data, nextIndex);
-                    yield result;
-                }
-                while ( nextIndex < dataSize );
-
-                conn.end();
-                // await finished(conn);
-            }
+        if ( conn.isPaused() ) {
+            conn.resume();
         }
-        catch ( error ) {
-            debugLogger(error.stack);
-            throw new RedisConnectError(error.message);
+
+        for await ( const data of conn ) {
+            let result;
+            let dataSize = data.length;
+            let nextIndex = 0;
+            do {
+                // await sleep(100);
+                [ result, nextIndex ] = extractValue(data, nextIndex);
+                yield result;
+            }
+            while ( nextIndex < dataSize );
+
+            conn.end();
+            // await finished(conn);
         }
 
         if ( conn.destroyed ) {
-            conn.connect(this.#connOpts);
-            await once(conn, `connect`);
+            try {
+                conn.connect(this.#connOpts);
+                await once(conn, `connect`);
+            }
+            catch ( e ) {
+                debugLogger(e.stack);
+                throw new RedisConnectError(e.message);
+            }
         }
 
-        // this.#nextUp = this.#nextUp - 1;
-        this.#usingMap.delete(index);
-        // return conn;
+        delete this.#usingMap[index];
+        return conn; // no point
     }
 
-    async* createResult ( cmd ) {
-        try {
-            yield* await this.#run(cmd);
-        }
-        catch ( e ) {
-            debugLogger(e.stack);
-            throw new RedisConnectError(e.message);
-        }
-    }
+    // async* createResult ( cmd ) {
+    //     try {
+    //         yield* await this.#run(cmd);
+    //     }
+    //     catch ( e ) {
+    //         debugLogger(e.stack);
+    //         console.error(e.message);
+    //     }
+    // }
+
+    // async getFinal ( cmd ) {
+    //     const final = [];
+    //     for await ( const response of this.createResult(cmd) ) {
+    //         final.push(response);
+    //     }
+    //     return final;
+    // }
 
     async getFinal ( cmd ) {
         const final = [];
-        for await ( const response of this.createResult(cmd) ) {
+        for await ( const response of this.#run(cmd) ) {
             final.push(response);
         }
         return final;
@@ -208,20 +189,34 @@ class Connect {
         const key = `${this.#options.keyPrefix}${keySuffix}`;
         const dataStr = data.join(` `);
         const cmd = `HMSET ${key} ${dataStr}\r\n`;
-        return this.getFinal(cmd);
+        return await this.getFinal(cmd);
     }
 
     async hgetall ( keySuffix ) {
         const key = `${this.#options.keyPrefix}${keySuffix}`;
         const cmd = `HGETALL ${key}\r\n`;
-        return this.getFinal(cmd);
+        return await this.getFinal(cmd);
     }
 
     async hmget ( keySuffix, fields ) {
         const key = `${this.#options.keyPrefix}${keySuffix}`;
         const fieldsStr = fields.join(` `);
         const cmd = `HMGET ${key} ${fieldsStr}\r\n`;
-        return this.getFinal(cmd);
+        return await this.getFinal(cmd);
+    }
+
+    async quit () {
+        const cmd = `QUIT\r\n`;
+        return await this.getFinal(cmd);
+    }
+
+    async clientName ( name ) {
+        const results = [];
+        for ( const [ connectionName, ] of this.#connections ) {
+            const cmd = `CLIENT SETNAME ${name}-${connectionName}\r\n`;
+            results.push(await this.getFinal(cmd));
+        }
+        return results;
     }
 }
 
