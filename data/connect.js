@@ -92,7 +92,7 @@ class Connect {
             // "noDelay": true,
         };
 
-        for ( let i = 0; i < this.#options.poolMax; i++ ) {
+        /*for ( let i = 0; i < this.#options.poolMax; i++ ) {
             const connectionName = this.#options.connectionName + `-${i}`;
             const conn = net.createConnection(this.#connOpts);
             // conn.allowHalfOpen = true;
@@ -105,7 +105,7 @@ class Connect {
                 writableEnded: conn.writableEnded,
             });
             this.#connections.set(connectionName, conn);
-        }
+        }*/
     }
 
     async drop () {
@@ -120,12 +120,12 @@ class Connect {
     }
 
     async* #run ( command = `` ) {
-        const index = this.#nextUp % this.#connections.size;
+        // const index = this.#nextUp % this.#connections.size;
 
-        this.#nextUp = index + 1;
-        this.#usingMap[ index ] = true;
-        const connectionName = this.#options.connectionName + `-${index}`;
-        const conn = this.#connections.get(connectionName);
+        // this.#nextUp = index + 1;
+        // this.#usingMap[ index ] = true;
+        // const connectionName = this.#options.connectionName + `-${index}`;
+        const conn = net.createConnection(this.#connOpts);
 
         // conn.setKeepAlive(true);
 
@@ -161,22 +161,22 @@ class Connect {
             conn.end();
             // await finished(conn);
         }
-        if ( conn.destroyed ) {
-            try {
-                conn.write(`QUIT\r\n`);
-                conn.unref();
-                const nextConn = net.createConnection(this.#connOpts);
-                this.#connections.set(connectionName, nextConn);
-                // conn.connect(this.#connOpts);
-                await once(nextConn, `connect`);
-            }
-            catch ( e ) {
-                debugLogger(e.stack);
-                throw new RedisConnectError(e.message);
-            }
-        }
+        // if ( conn.destroyed ) {
+        //     try {
+        //         conn.write(`QUIT\r\n`);
+        //         conn.unref();
+        //         const nextConn = net.createConnection(this.#connOpts);
+        //         this.#connections.set(connectionName, nextConn);
+        //         // conn.connect(this.#connOpts);
+        //         await once(nextConn, `connect`);
+        //     }
+        //     catch ( e ) {
+        //         debugLogger(e.stack);
+        //         throw new RedisConnectError(e.message);
+        //     }
+        // }
 
-        delete this.#usingMap[index];
+        // delete this.#usingMap[index];
     }
 
     // async* createResult ( cmd ) {
@@ -231,12 +231,19 @@ class Connect {
     }
 
     async clientName ( name ) {
-        const results = [];
-        for ( const [ connectionName, ] of this.#connections ) {
-            const cmd = `CLIENT SETNAME ${name}-${connectionName}\r\n`;
-            results.push(await this.getFinal(cmd));
-        }
-        return results;
+        const cmd = `CLIENT SETNAME ${name}-${this.#options.connectionName}\r\n`;
+        return await this.getFinal(cmd);
+        // const results = [];
+        // for ( const [ connectionName, ] of this.#connections ) {
+        //     const cmd = `CLIENT SETNAME ${name}-${connectionName}\r\n`;
+        //     results.push(await this.getFinal(cmd));
+        // }
+        // return results;
+    }
+
+    async info () {
+        const cmd = `INFO\r\n`;
+        return await this.getFinal(cmd);
     }
 }
 

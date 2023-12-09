@@ -1,6 +1,7 @@
 "use strict";
 
 const Redis = require("ioredis");
+const { convertBytesToString, } = require("./util");
 
 const redis = new Redis({
     "keyPrefix": `test:cc:`,
@@ -17,7 +18,7 @@ setTimeout(async () => {
     const start1 = performance.now();
 
     const promises = Array.from({
-        "length": 1000,
+        "length": 10000,
     }, ( _, i ) => {
         return redis.hmset(`def8`, [
             `z${i}`,
@@ -39,7 +40,7 @@ setTimeout(async () => {
     const start2 = performance.now();
 
     const promises2 = Array.from({
-        "length": 1000,
+        "length": 10000,
     }, ( _, i ) => {
         return redis.hmget(`def8`, [
             `z${i}`,
@@ -56,7 +57,7 @@ setTimeout(async () => {
 
     const mem2 = process.memoryUsage();
     for ( const key of Object.keys(mem1) ) {
-        console.log(key + ` - ` + (mem2[ key ] - mem1[ key ]));
+        console.log(key + `: ` + convertBytesToString(mem2[ key ] - mem1[ key ]));
     }
 
     console.log(`1: `, ((end1 - start1) / 1000).toFixed(3));
